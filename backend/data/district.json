@@ -1,0 +1,755 @@
+{
+  "district_name": "Sundarbari Coastal District",
+  "zones": [
+    {
+      "id": "Z01",
+      "name": "Kalingapatnam Sands",
+      "population": 18000,
+      "area_km2": 32.0,
+      "elevation_m": 1.8,
+      "dist_to_shelter_km": 9.5,
+      "dist_to_hospital_km": 16.0,
+      "connectivity": 0.15,
+      "landmarks": [
+        {
+          "name": "Light Point",
+          "lat": 17.52,
+          "lon": 82.83,
+          "aliases": [
+            "old lighthouse",
+            "light point post",
+            "batti ghar"
+          ]
+        },
+        {
+          "name": "Fish Landing Jetty",
+          "lat": 17.54,
+          "lon": 82.85,
+          "aliases": [
+            "jetty ghat",
+            "boat dock",
+            "machli landing"
+          ]
+        }
+      ],
+      "polygon": [
+        [
+          17.5,
+          82.8
+        ],
+        [
+          17.5,
+          82.91
+        ],
+        [
+          17.59,
+          82.91
+        ],
+        [
+          17.59,
+          82.8
+        ],
+        [
+          17.5,
+          82.8
+        ]
+      ],
+      "risk_score": 0.698,
+      "risk_factors": {
+        "low_elevation_risk": 0.982,
+        "density_risk": 0.037,
+        "shelter_distance_risk": 0.842,
+        "hospital_distance_risk": 0.831,
+        "isolation_risk": 1.0
+      },
+      "is_silent": true
+    },
+    {
+      "id": "Z02",
+      "name": "Bhimunipat Port",
+      "population": 65000,
+      "area_km2": 22.0,
+      "elevation_m": 4.5,
+      "dist_to_shelter_km": 2.1,
+      "dist_to_hospital_km": 3.0,
+      "connectivity": 0.95,
+      "landmarks": [
+        {
+          "name": "Central Wharf",
+          "lat": 17.53,
+          "lon": 82.95,
+          "aliases": [
+            "port gate",
+            "wharf road",
+            "godown 3"
+          ]
+        },
+        {
+          "name": "Clock Tower Chowk",
+          "lat": 17.55,
+          "lon": 82.98,
+          "aliases": [
+            "ghanta ghar",
+            "clock tower",
+            "bazaar square"
+          ]
+        }
+      ],
+      "polygon": [
+        [
+          17.5,
+          82.91
+        ],
+        [
+          17.5,
+          83.02
+        ],
+        [
+          17.59,
+          83.02
+        ],
+        [
+          17.59,
+          82.91
+        ],
+        [
+          17.5,
+          82.91
+        ]
+      ],
+      "risk_score": 0.5009,
+      "risk_factors": {
+        "low_elevation_risk": 0.902,
+        "density_risk": 0.968,
+        "shelter_distance_risk": 0.063,
+        "hospital_distance_risk": 0.101,
+        "isolation_risk": 0.036
+      },
+      "is_silent": false
+    },
+    {
+      "id": "Z03",
+      "name": "Sagarmatha Town",
+      "population": 85000,
+      "area_km2": 28.0,
+      "elevation_m": 8.0,
+      "dist_to_shelter_km": 1.5,
+      "dist_to_hospital_km": 1.2,
+      "connectivity": 0.98,
+      "landmarks": [
+        {
+          "name": "Civil Hospital Gate",
+          "lat": 17.54,
+          "lon": 83.12,
+          "aliases": [
+            "district hospital",
+            "civil hospital",
+            "red cross clinic"
+          ]
+        },
+        {
+          "name": "Dak Bungalow",
+          "lat": 17.56,
+          "lon": 83.15,
+          "aliases": [
+            "guest house",
+            "bungalow junction"
+          ]
+        }
+      ],
+      "polygon": [
+        [
+          17.5,
+          83.02
+        ],
+        [
+          17.5,
+          83.13
+        ],
+        [
+          17.59,
+          83.13
+        ],
+        [
+          17.59,
+          83.02
+        ],
+        [
+          17.5,
+          83.02
+        ]
+      ],
+      "risk_score": 0.4497,
+      "risk_factors": {
+        "low_elevation_risk": 0.799,
+        "density_risk": 1.0,
+        "shelter_distance_risk": 0.0,
+        "hospital_distance_risk": 0.0,
+        "isolation_risk": 0.0
+      },
+      "is_silent": false
+    },
+    {
+      "id": "Z04",
+      "name": "Dhamra Creek Estuary",
+      "population": 24000,
+      "area_km2": 40.0,
+      "elevation_m": 1.2,
+      "dist_to_shelter_km": 11.0,
+      "dist_to_hospital_km": 18.5,
+      "connectivity": 0.2,
+      "landmarks": [
+        {
+          "name": "Mangrove Watchtower",
+          "lat": 17.62,
+          "lon": 82.82,
+          "aliases": [
+            "forest post",
+            "mangrove tower",
+            "watch post"
+          ]
+        },
+        {
+          "name": "Creek Bund",
+          "lat": 17.65,
+          "lon": 82.86,
+          "aliases": [
+            "creek embankment",
+            "bund road",
+            "nadi bandh"
+          ]
+        }
+      ],
+      "polygon": [
+        [
+          17.59,
+          82.8
+        ],
+        [
+          17.59,
+          82.91
+        ],
+        [
+          17.68,
+          82.91
+        ],
+        [
+          17.68,
+          82.8
+        ],
+        [
+          17.59,
+          82.8
+        ]
+      ],
+      "risk_score": 0.7497,
+      "risk_factors": {
+        "low_elevation_risk": 1.0,
+        "density_risk": 0.052,
+        "shelter_distance_risk": 1.0,
+        "hospital_distance_risk": 0.972,
+        "isolation_risk": 0.94
+      },
+      "is_silent": true
+    },
+    {
+      "id": "Z05",
+      "name": "Devunalt Ward",
+      "population": 52000,
+      "area_km2": 25.0,
+      "elevation_m": 5.2,
+      "dist_to_shelter_km": 3.0,
+      "dist_to_hospital_km": 4.5,
+      "connectivity": 0.88,
+      "landmarks": [
+        {
+          "name": "Mandal High School",
+          "lat": 17.63,
+          "lon": 82.94,
+          "aliases": [
+            "high school shelter",
+            "govt school ground",
+            "vidyalaya"
+          ]
+        },
+        {
+          "name": "Shiva Temple Pond",
+          "lat": 17.66,
+          "lon": 82.97,
+          "aliases": [
+            "mandir talaab",
+            "temple pond",
+            "shivalayam"
+          ]
+        }
+      ],
+      "polygon": [
+        [
+          17.59,
+          82.91
+        ],
+        [
+          17.59,
+          83.02
+        ],
+        [
+          17.68,
+          83.02
+        ],
+        [
+          17.68,
+          82.91
+        ],
+        [
+          17.59,
+          82.91
+        ]
+      ],
+      "risk_score": 0.4549,
+      "risk_factors": {
+        "low_elevation_risk": 0.882,
+        "density_risk": 0.628,
+        "shelter_distance_risk": 0.158,
+        "hospital_distance_risk": 0.185,
+        "isolation_risk": 0.12
+      },
+      "is_silent": false
+    },
+    {
+      "id": "Z06",
+      "name": "Rushi Valley Junction",
+      "population": 48000,
+      "area_km2": 30.0,
+      "elevation_m": 12.0,
+      "dist_to_shelter_km": 2.8,
+      "dist_to_hospital_km": 5.0,
+      "connectivity": 0.9,
+      "landmarks": [
+        {
+          "name": "Overbridge Intersection",
+          "lat": 17.64,
+          "lon": 83.1,
+          "aliases": [
+            "flyover junction",
+            "railway bridge",
+            "bypass"
+          ]
+        },
+        {
+          "name": "Grain Market Yard",
+          "lat": 17.67,
+          "lon": 83.14,
+          "aliases": [
+            "apmc yard",
+            "mandi",
+            "grain depot"
+          ]
+        }
+      ],
+      "polygon": [
+        [
+          17.59,
+          83.02
+        ],
+        [
+          17.59,
+          83.13
+        ],
+        [
+          17.68,
+          83.13
+        ],
+        [
+          17.68,
+          83.02
+        ],
+        [
+          17.59,
+          83.02
+        ]
+      ],
+      "risk_score": 0.3543,
+      "risk_factors": {
+        "low_elevation_risk": 0.68,
+        "density_risk": 0.441,
+        "shelter_distance_risk": 0.137,
+        "hospital_distance_risk": 0.213,
+        "isolation_risk": 0.096
+      },
+      "is_silent": false
+    },
+    {
+      "id": "Z07",
+      "name": "Baruva Lowlands",
+      "population": 21000,
+      "area_km2": 45.0,
+      "elevation_m": 1.5,
+      "dist_to_shelter_km": 10.2,
+      "dist_to_hospital_km": 19.0,
+      "connectivity": 0.18,
+      "landmarks": [
+        {
+          "name": "Salt Pan Colony",
+          "lat": 17.72,
+          "lon": 82.81,
+          "aliases": [
+            "salt pans",
+            "namak karkhana",
+            "salt works"
+          ]
+        },
+        {
+          "name": "Old Tidal Sluice Gate",
+          "lat": 17.75,
+          "lon": 82.85,
+          "aliases": [
+            "sluice gate",
+            "canal lock",
+            "naala phatak"
+          ]
+        }
+      ],
+      "polygon": [
+        [
+          17.68,
+          82.8
+        ],
+        [
+          17.68,
+          82.91
+        ],
+        [
+          17.77,
+          82.91
+        ],
+        [
+          17.77,
+          82.8
+        ],
+        [
+          17.68,
+          82.8
+        ]
+      ],
+      "risk_score": 0.7255,
+      "risk_factors": {
+        "low_elevation_risk": 0.991,
+        "density_risk": 0.0,
+        "shelter_distance_risk": 0.916,
+        "hospital_distance_risk": 1.0,
+        "isolation_risk": 0.964
+      },
+      "is_silent": true
+    },
+    {
+      "id": "Z08",
+      "name": "Penta Highway Corridor",
+      "population": 35000,
+      "area_km2": 35.0,
+      "elevation_m": 15.0,
+      "dist_to_shelter_km": 4.0,
+      "dist_to_hospital_km": 6.5,
+      "connectivity": 0.85,
+      "landmarks": [
+        {
+          "name": "Toll Plaza 4",
+          "lat": 17.73,
+          "lon": 82.95,
+          "aliases": [
+            "highway toll gate",
+            "toll booth",
+            "nh plaza"
+          ]
+        },
+        {
+          "name": "Petrol Bunk Square",
+          "lat": 17.76,
+          "lon": 82.98,
+          "aliases": [
+            "iocl pump",
+            "petrol bunk",
+            "highway dhaba"
+          ]
+        }
+      ],
+      "polygon": [
+        [
+          17.68,
+          82.91
+        ],
+        [
+          17.68,
+          83.02
+        ],
+        [
+          17.77,
+          83.02
+        ],
+        [
+          17.77,
+          82.91
+        ],
+        [
+          17.68,
+          82.91
+        ]
+      ],
+      "risk_score": 0.3206,
+      "risk_factors": {
+        "low_elevation_risk": 0.592,
+        "density_risk": 0.208,
+        "shelter_distance_risk": 0.263,
+        "hospital_distance_risk": 0.298,
+        "isolation_risk": 0.157
+      },
+      "is_silent": false
+    },
+    {
+      "id": "Z09",
+      "name": "Kasimkota Farmlands",
+      "population": 29000,
+      "area_km2": 38.0,
+      "elevation_m": 18.0,
+      "dist_to_shelter_km": 4.5,
+      "dist_to_hospital_km": 8.0,
+      "connectivity": 0.75,
+      "landmarks": [
+        {
+          "name": "Panchayat Bhavan",
+          "lat": 17.74,
+          "lon": 83.11,
+          "aliases": [
+            "panchayat office",
+            "gram sabha hall"
+          ]
+        },
+        {
+          "name": "Canal Bridge Siphon",
+          "lat": 17.77,
+          "lon": 83.16,
+          "aliases": [
+            "canal pulla",
+            "water siphon",
+            "canal bridge"
+          ]
+        }
+      ],
+      "polygon": [
+        [
+          17.68,
+          83.02
+        ],
+        [
+          17.68,
+          83.13
+        ],
+        [
+          17.77,
+          83.13
+        ],
+        [
+          17.77,
+          83.02
+        ],
+        [
+          17.68,
+          83.02
+        ]
+      ],
+      "risk_score": 0.3166,
+      "risk_factors": {
+        "low_elevation_risk": 0.503,
+        "density_risk": 0.115,
+        "shelter_distance_risk": 0.316,
+        "hospital_distance_risk": 0.382,
+        "isolation_risk": 0.277
+      },
+      "is_silent": false
+    },
+    {
+      "id": "Z10",
+      "name": "Simhachalam Foothills",
+      "population": 32000,
+      "area_km2": 42.0,
+      "elevation_m": 35.0,
+      "dist_to_shelter_km": 5.0,
+      "dist_to_hospital_km": 9.0,
+      "connectivity": 0.82,
+      "landmarks": [
+        {
+          "name": "Hill Temple Steps",
+          "lat": 17.82,
+          "lon": 82.84,
+          "aliases": [
+            "temple stairs",
+            "ghat road curve"
+          ]
+        },
+        {
+          "name": "Forest Check Post",
+          "lat": 17.85,
+          "lon": 82.87,
+          "aliases": [
+            "forest barrier",
+            "jungle naka"
+          ]
+        }
+      ],
+      "polygon": [
+        [
+          17.77,
+          82.8
+        ],
+        [
+          17.77,
+          82.91
+        ],
+        [
+          17.86,
+          82.91
+        ],
+        [
+          17.86,
+          82.8
+        ],
+        [
+          17.77,
+          82.8
+        ]
+      ],
+      "risk_score": 0.1971,
+      "risk_factors": {
+        "low_elevation_risk": 0.0,
+        "density_risk": 0.115,
+        "shelter_distance_risk": 0.368,
+        "hospital_distance_risk": 0.438,
+        "isolation_risk": 0.193
+      },
+      "is_silent": false
+    },
+    {
+      "id": "Z11",
+      "name": "Anakapalle West",
+      "population": 41000,
+      "area_km2": 29.0,
+      "elevation_m": 22.0,
+      "dist_to_shelter_km": 3.5,
+      "dist_to_hospital_km": 7.0,
+      "connectivity": 0.84,
+      "landmarks": [
+        {
+          "name": "Railway Goods Shed",
+          "lat": 17.83,
+          "lon": 82.96,
+          "aliases": [
+            "railway godown",
+            "station goods yard"
+          ]
+        },
+        {
+          "name": "Community Hall",
+          "lat": 17.86,
+          "lon": 82.99,
+          "aliases": [
+            "kalyana mandapam",
+            "shadi mahal",
+            "hall"
+          ]
+        }
+      ],
+      "polygon": [
+        [
+          17.77,
+          82.91
+        ],
+        [
+          17.77,
+          83.02
+        ],
+        [
+          17.86,
+          83.02
+        ],
+        [
+          17.86,
+          82.91
+        ],
+        [
+          17.77,
+          82.91
+        ]
+      ],
+      "risk_score": 0.3046,
+      "risk_factors": {
+        "low_elevation_risk": 0.385,
+        "density_risk": 0.369,
+        "shelter_distance_risk": 0.211,
+        "hospital_distance_risk": 0.326,
+        "isolation_risk": 0.169
+      },
+      "is_silent": false
+    },
+    {
+      "id": "Z12",
+      "name": "Gajuwaka Industrial Belt",
+      "population": 58000,
+      "area_km2": 26.0,
+      "elevation_m": 28.0,
+      "dist_to_shelter_km": 3.0,
+      "dist_to_hospital_km": 5.2,
+      "connectivity": 0.92,
+      "landmarks": [
+        {
+          "name": "Substation Grid",
+          "lat": 17.84,
+          "lon": 83.12,
+          "aliases": [
+            "power substation",
+            "bijli office"
+          ]
+        },
+        {
+          "name": "Labour Colony Gate",
+          "lat": 17.87,
+          "lon": 83.15,
+          "aliases": [
+            "colony gate",
+            "worker quarters",
+            "mill road"
+          ]
+        }
+      ],
+      "polygon": [
+        [
+          17.77,
+          83.02
+        ],
+        [
+          17.77,
+          83.13
+        ],
+        [
+          17.86,
+          83.13
+        ],
+        [
+          17.86,
+          83.02
+        ],
+        [
+          17.77,
+          83.02
+        ]
+      ],
+      "risk_score": 0.2996,
+      "risk_factors": {
+        "low_elevation_risk": 0.207,
+        "density_risk": 0.687,
+        "shelter_distance_risk": 0.158,
+        "hospital_distance_risk": 0.225,
+        "isolation_risk": 0.072
+      },
+      "is_silent": false
+    }
+  ]
+}

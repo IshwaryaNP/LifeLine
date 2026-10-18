@@ -1,0 +1,1349 @@
+import React, { useState, useEffect } from 'react'
+import {
+  MapContainer,
+  TileLayer,
+  Polygon,
+  Circle,
+  CircleMarker,
+  Popup,
+  Tooltip
+} from 'react-leaflet'
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip as RechartsTooltip,
+  Legend,
+  ResponsiveContainer
+} from 'recharts'
+import {
+  AlertTriangle,
+  ShieldAlert,
+  Radio,
+  FileCheck,
+  RotateCcw,
+  Play,
+  Info,
+  CheckCircle,
+  Activity,
+  Layers,
+  Clock,
+  Users,
+  Compass,
+  ArrowRight,
+  HelpCircle,
+  Sliders,
+  CheckSquare,
+  Smartphone,
+  MessageSquare,
+  Send,
+  Bell
+} from 'lucide-react'
+
+function getZoneColor(risk) {
+  if (risk > 0.65) return '#ef4444' // Red
+  if (risk > 0.50) return '#f97316' // Orange
+  if (risk > 0.35) return '#eab308' // Yellow
+  return '#22c55e' // Green
+}
+
+export default function App() {
+  const [activeTab, setActiveTab] = useState('after') // default to After Landfall as it's the core action!
+  const [district, setDistrict] = useState(null)
+  const [incidents, setIncidents] = useState([])
+  const [selectedIncident, setSelectedIncident] = useState(null)
+  const [silenceAlerts, setSilenceAlerts] = useState([])
+  const [auditLogs, setAuditLogs] = useState([])
+  const [metrics, setMetrics] = useState(null)
+  const [alerts, setAlerts] = useState([])
+
+  // Simulation state
+  const [simState, setSimState] = useState({
+    is_running: false,
+    current_minute: 0,
+    max_minute: 240,
+    speed: 5,
+    received_reports_count: 0
+  })
+
+  // Settings
+  const [showOsmTiles, setShowOsmTiles] = useState(false)
+  const [simSpeed, setSimSpeed] = useState(5)
+  const [showGuideBanner, setShowGuideBanner] = useState(true)
+
+  // Modals
+  const [overrideModalOpen, setOverrideModalOpen] = useState(false)
+  const [overrideReason, setOverrideReason] = useState('')
+  const [overridePriority, setOverridePriority] = useState(0.85)
+
+  // Citizen SMS Inbox simulation modal
+  const [citizenInboxModal, setCitizenInboxModal] = useState(null)
+
+  // Warning form in Before Landfall
+  const [warningForm, setWarningForm] = useState({
+    cyclone_name: 'MONSOON-V1',
+    expected_landfall_time: '18:00 Local Time',
+    category: 'Very Severe Cyclonic Storm (Cat 4)'
+  })
+
+  useEffect(() => {
+    fetchDistrict()
+    fetchAlerts()
+    fetchAudit()
+    fetchMetrics()
+  }, [])
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      fetchSimState()
+      fetchIncidents()
+      fetchSilence()
+      fetchAudit()
+    }, 1000)
+    return () => clearInterval(timer)
+  }, [])
+
+  const fetchDistrict = async () => {
+    try {
+      const res = await fetch('/api/district')
+      if (res.ok) setDistrict(await res.json())
+    } catch (e) {
+      console.error(e)
+    }
+  }
+
+  const fetchSimState = async () => {
+    try {
+      const res = await fetch('/api/simulation/state')
+      if (res.ok) setSimState(await res.json())
+    } catch (e) {
+      console.error(e)
+    }
+  }
+
+  const fetchIncidents = async () => {
+    try {
+      const res = await fetch('/api/incidents')
+      if (res.ok) {
+        const data = await res.json()
+        setIncidents(data)
+        if (selectedIncident) {
+          const fresh = data.find((i) => i.id === selectedIncident.id)
+          if (fresh) setSelectedIncident(fresh)
+        } else if (data.length > 0 && !selectedIncident) {
+          setSelectedIncident(data[0]) // automatically select top incident for user clarity!
+        }
+      }
+    } catch (e) {
+      console.error(e)
+    }
+  }
+
+  const fetchSilence = async () => {
+    try {
+      const res = await fetch('/api/silence')
+      if (res.ok) setSilenceAlerts(await res.json())
+    } catch (e) {
+      console.error(e)
+    }
+  }
+
+  const fetchAudit = async () => {
+    try {
+      const res = await fetch('/api/audit')
+      if (res.ok) setAuditLogs(await res.json())
+    } catch (e) {
+      console.error(e)
+    }
+  }
+
+  const fetchMetrics = async () => {
+    try {
+      const res = await fetch('/api/metrics')
+      if (res.ok) setMetrics(await res.json())
+    } catch (e) {
+      console.error(e)
+    }
+  }
+
+  const fetchAlerts = async () => {
+    try {
+      const res = await fetch('/api/alerts')
+      if (res.ok) setAlerts(await res.json())
+    } catch (e) {
+      console.error(e)
+    }
+  }
+
+  const handleStartSim = async () => {
+    await fetch('/api/simulation/start', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ speed: simSpeed })
+    })
+    fetchSimState()
+  }
+
+  const handleResetSim = async () => {
+    await fetch('/api/simulation/reset', { method: 'POST' })
+    fetchSimState()
+    fetchIncidents()
+    fetchSilence()
+    fetchAudit()
+    setSelectedIncident(null)
+  }
+
+  const handleAction = async (type, reason, newPriority = null) => {
+    if (!selectedIncident) return
+    if (!reason || reason.trim() === '') {
+      alert('Action reason is mandatory for human-in-the-loop decisions.')
+      return
+    }
+
+    try {
+      const res = await fetch(`/api/incidents/${selectedIncident.id}/actions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type, reason, new_priority: newPriority })
+      })
+      if (res.ok) {
+        setOverrideModalOpen(false)
+        setOverrideReason('')
+        fetchIncidents()
+        fetchAudit()
+
+        // If approved, trigger citizen emergency SMS inbox preview!
+        if (type === 'approve') {
+          setCitizenInboxModal({
+            title: `EMERGENCY ALERT: ${selectedIncident.zone_name.toUpperCase()}`,
+            zone: selectedIncident.zone_name,
+            sender: "Disaster Management Authority (NDMA / SDMA)",
+            phone: "+91 (Simulated Cell Broadcast)",
+            body: `⚠️ URGENT ADVISORY: Your area (${selectedIncident.zone_name}) is under active emergency response for ${selectedIncident.need_type.toUpperCase()}. Rescue and medical relief teams have been authorized for dispatch. Please stay on elevated ground, avoid snapped electric cables, and keep battery torches ready. Help is on the way!`,
+            time: "Just Now",
+            type: "incident_dispatch"
+          })
+        }
+      } else {
+        const err = await res.json()
+        alert(`Error: ${err.detail || 'Failed'}`)
+      }
+    } catch (e) {
+      console.error(e)
+    }
+  }
+
+  const handleDraftWarning = async (e) => {
+    e.preventDefault()
+    try {
+      const res = await fetch('/api/alerts/draft', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(warningForm)
+      })
+      if (res.ok) {
+        fetchAlerts()
+        alert('Preparedness directives drafted for high-risk zones!')
+      }
+    } catch (e) {
+      console.error(e)
+    }
+  }
+
+  const handleApproveAlert = async (alertId) => {
+    try {
+      const res = await fetch(`/api/alerts/${alertId}/approve`, { method: 'POST' })
+      if (res.ok) {
+        fetchAlerts()
+        const approvedItem = alerts.find((a) => a.id === alertId)
+        if (approvedItem) {
+          setCitizenInboxModal({
+            title: `CYCLONE BROADCAST: ${approvedItem.zone_name.toUpperCase()}`,
+            zone: approvedItem.zone_name,
+            sender: "Emergency Operations Center (EOC)",
+            phone: "EMERGENCY CELL BROADCAST",
+            body: `🔴 RED ALERT: Severe Cyclone warning for ${approvedItem.zone_name}! Expected landfall: ${approvedItem.expected_landfall_time}. Mandatory evacuation to designated concrete shelters is active. Please secure doors, turn off main electrical switches, and take water/meds. Please take care!`,
+            time: "Just Now",
+            type: "zone_broadcast"
+          })
+        }
+      }
+    } catch (e) {
+      console.error(e)
+    }
+  }
+
+  const districtCenter = [17.68, 82.98]
+
+  return (
+    <div className="app-layout">
+      {/* 1. PERSISTENT SIMULATED DATA BANNER */}
+      <div className="simulated-banner">
+        <span className="simulated-badge">EXERCISE</span>
+        ⚠️ SIMULATED DATA ONLY — FOR CYCLONE TRIAGE DECISION-SUPPORT EVALUATION
+        <span className="simulated-badge">OFFLINE-MODE</span>
+      </div>
+
+      {/* Header */}
+      <header className="app-header">
+        <div className="header-title-area">
+          <h1>
+            <Radio size={28} color="#38bdf8" /> LIFELINE TRIAGE
+          </h1>
+          <span className="header-subtitle">
+            Cyclone Response Decision-Support Assistant — Sundarbari Coastal District
+          </span>
+        </div>
+
+        {/* Step-by-step navigation */}
+        <nav className="nav-tabs">
+          <button
+            className={`tab-btn ${activeTab === 'after' ? 'active' : ''}`}
+            onClick={() => setActiveTab('after')}
+          >
+            <span className="step-num">Step 1</span>
+            <Activity size={18} /> Live Triage Queue
+          </button>
+          <button
+            className={`tab-btn ${activeTab === 'before' ? 'active' : ''}`}
+            onClick={() => setActiveTab('before')}
+          >
+            <span className="step-num">Step 2</span>
+            <ShieldAlert size={18} /> Pre-Landfall Planning
+          </button>
+          <button
+            className={`tab-btn ${activeTab === 'results' ? 'active' : ''}`}
+            onClick={() => {
+              setActiveTab('results')
+              fetchMetrics()
+            }}
+          >
+            <span className="step-num">Step 3</span>
+            <Layers size={18} /> Benchmark & Results
+          </button>
+          <button
+            className={`tab-btn ${activeTab === 'audit' ? 'active' : ''}`}
+            onClick={() => {
+              setActiveTab('audit')
+              fetchAudit()
+            }}
+          >
+            <span className="step-num">Step 4</span>
+            <FileCheck size={18} /> Coordinator Log
+          </button>
+        </nav>
+      </header>
+
+      {/* User Guidance Banner */}
+      {showGuideBanner && (
+        <div className="guide-assistant-banner">
+          <div className="guide-content">
+            <div className="guide-icon">
+              <Compass size={24} color="#38bdf8" />
+            </div>
+            <div className="guide-text">
+              <strong>Quick Guide: How to use this screen right now:</strong>
+              <div className="guide-steps">
+                <span>
+                  <strong>1. Click:</strong> Blue <code>Simulate Landfall</code> button below.
+                </span>
+                <ArrowRight size={14} color="#94a3b8" />
+                <span>
+                  <strong>2. Watch:</strong> Calls consolidate into the <code>Priority Queue</code> on the right.
+                </span>
+                <ArrowRight size={14} color="#94a3b8" />
+                <span>
+                  <strong>3. Click any Card:</strong> See the exact reason <code>Why this rank</code>.
+                </span>
+                <ArrowRight size={14} color="#94a3b8" />
+                <span>
+                  <strong>4. Check Orange Box:</strong> Notice <code>Silent Zones</code> with no phone signal.
+                </span>
+              </div>
+            </div>
+          </div>
+          <button className="guide-close-btn" onClick={() => setShowGuideBanner(false)}>
+            ✕ Dismiss Guide
+          </button>
+        </div>
+      )}
+
+      {/* Primary Action Control Bar */}
+      <div className="sim-controls-bar">
+        <div className="control-group">
+          {!simState.is_running ? (
+            <button className="btn-primary-large" onClick={handleStartSim}>
+              <Play size={18} fill="#ffffff" />
+              START SIMULATION (STREAM REPORTS)
+            </button>
+          ) : (
+            <button className="btn-running-large" disabled>
+              <Activity size={18} className="spin" />
+              STREAMING LANDFALL REPORTS ({simState.speed}x)...
+            </button>
+          )}
+
+          <div className="speed-selector-group">
+            <Sliders size={15} color="#94a3b8" />
+            <label>Simulation Speed:</label>
+            <select
+              className="form-select-sm"
+              value={simSpeed}
+              onChange={(e) => setSimSpeed(Number(e.target.value))}
+              disabled={simState.is_running}
+            >
+              <option value={1}>1x (Real-time)</option>
+              <option value={5}>5x (Fast demo)</option>
+              <option value={20}>20x (Instant)</option>
+            </select>
+          </div>
+
+          <button className="btn-secondary" onClick={handleResetSim} title="Reset timeline to T+0m">
+            <RotateCcw size={15} /> Reset
+          </button>
+        </div>
+
+        <div className="progress-container">
+          <div className="progress-labels">
+            <span>
+              <Clock size={13} style={{ verticalAlign: 'middle', marginRight: 4 }} />
+              <strong>Timeline:</strong> T+{simState.current_minute}m / 240m (Landfall Window)
+            </span>
+            <span style={{ color: '#38bdf8', fontWeight: 700 }}>
+              {simState.received_reports_count} raw reports ➔ {incidents.length} consolidated incidents
+            </span>
+          </div>
+          <div className="progress-bar-bg">
+            <div
+              className="progress-bar-fill"
+              style={{ width: `${(simState.current_minute / simState.max_minute) * 100}%` }}
+            />
+          </div>
+        </div>
+
+        <div className="control-group" style={{ fontSize: 13 }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', color: '#cbd5e1' }}>
+            <input
+              type="checkbox"
+              checked={showOsmTiles}
+              onChange={(e) => setShowOsmTiles(e.target.checked)}
+            />
+            OSM Map Tiles (Needs Internet)
+          </label>
+        </div>
+      </div>
+
+      {/* Main Content Area */}
+      <main className="page-container">
+        {/* ========================================================================= */}
+        {/* TAB 1: AFTER LANDFALL (THE MAIN LIVE QUEUE SCREEN) */}
+        {/* ========================================================================= */}
+        {activeTab === 'after' && (
+          <div className="two-col-layout">
+            {/* Left Column: Map + Silence Warnings */}
+            <div className="dashboard-card">
+              <div className="card-title">
+                <div>
+                  <span style={{ fontSize: 18 }}>📍 Geographic Incident & Blackout Map</span>
+                  <div style={{ fontSize: 13, color: '#94a3b8', fontWeight: 'normal', marginTop: 2 }}>
+                    Circles represent incident uncertainty areas. Dashed orange zones are communication blackouts.
+                  </div>
+                </div>
+              </div>
+
+              <div className="map-wrapper">
+                <MapContainer
+                  center={districtCenter}
+                  zoom={10}
+                  style={{ height: '100%', width: '100%', background: '#090d16' }}
+                  attributionControl={false}
+                >
+                  {showOsmTiles && (
+                    <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+                  )}
+
+                  {district?.zones?.map((zone) => {
+                    const isPlantedSilent = zone.is_silent
+                    return (
+                      <Polygon
+                        key={zone.id}
+                        positions={zone.polygon}
+                        pathOptions={{
+                          color: isPlantedSilent ? '#f97316' : '#334155',
+                          weight: isPlantedSilent ? 3 : 1,
+                          dashArray: isPlantedSilent ? '6, 6' : undefined,
+                          fillColor: getZoneColor(zone.risk_score),
+                          fillOpacity: 0.25
+                        }}
+                      />
+                    )
+                  })}
+
+                  {incidents.map((inc) => {
+                    if (!inc.lat || !inc.lon) return null
+                    const isSelected = selectedIncident?.id === inc.id
+                    return (
+                      <React.Fragment key={inc.id}>
+                        <Circle
+                          center={[inc.lat, inc.lon]}
+                          radius={inc.radius_m || 800}
+                          pathOptions={{
+                            color: isSelected ? '#38bdf8' : '#ef4444',
+                            fillColor: '#ef4444',
+                            fillOpacity: isSelected ? 0.45 : 0.2,
+                            weight: isSelected ? 3 : 1
+                          }}
+                        />
+                        <CircleMarker
+                          center={[inc.lat, inc.lon]}
+                          radius={isSelected ? 11 : 7}
+                          pathOptions={{
+                            color: '#ffffff',
+                            fillColor: isSelected ? '#38bdf8' : '#dc2626',
+                            fillOpacity: 1,
+                            weight: 2
+                          }}
+                          eventHandlers={{
+                            click: () => setSelectedIncident(inc)
+                          }}
+                        >
+                          <Tooltip permanent={isSelected} direction="top">
+                            {inc.id}: {inc.need_type.toUpperCase()} (P:{inc.priority_score})
+                          </Tooltip>
+                        </CircleMarker>
+                      </React.Fragment>
+                    )
+                  })}
+                </MapContainer>
+              </div>
+
+              {/* Silent Zone Gap Warning Box */}
+              <div className="silence-banner">
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <h4>
+                    <AlertTriangle size={20} color="#f97316" />
+                    High-Risk Silent Zones Detected ({silenceAlerts.length})
+                  </h4>
+                  <span className="badge-tag" style={{ background: '#7c2d12', color: '#ffedd5' }}>
+                    Critical Attention
+                  </span>
+                </div>
+
+                <p style={{ fontSize: 13, color: '#fed7aa', margin: '6px 0 10px 0' }}>
+                  <strong>Why this matters:</strong> In these high-vulnerability coastal zones, mobile towers are destroyed.
+                  Lack of phone calls means communication blackout, <strong>NOT safety</strong>. Do not ignore them!
+                </p>
+
+                {silenceAlerts.length === 0 ? (
+                  <div style={{ fontSize: 13, color: '#94a3b8' }}>
+                    All zones currently reporting within expected baseline rates.
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {silenceAlerts.map((sa) => (
+                      <div
+                        key={sa.zone_id}
+                        style={{
+                          background: '#23120b',
+                          border: '1px solid #7c2d12',
+                          padding: '10px 14px',
+                          borderRadius: 6,
+                          fontSize: 13,
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center'
+                        }}
+                      >
+                        <div>
+                          <strong style={{ color: '#ffffff', fontSize: 14 }}>
+                            {sa.zone_name} ({sa.zone_id})
+                          </strong>
+                          <div style={{ color: '#fca5a5', fontSize: 12, marginTop: 2 }}>
+                            Only <strong>{sa.report_count}</strong> calls received (Expected ~
+                            {sa.expected_reports} for this population)
+                          </div>
+                        </div>
+                        <span className="status-pill status-overridden" style={{ whiteSpace: 'nowrap' }}>
+                          ⚡ Send Scout / HAM Radio
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Right Column: Ranked Incident Queue */}
+            <div className="dashboard-card">
+              <div className="card-title">
+                <div>
+                  <span style={{ fontSize: 18 }}>📋 Prioritized Incident Queue</span>
+                  <div style={{ fontSize: 13, color: '#94a3b8', fontWeight: 'normal', marginTop: 2 }}>
+                    Click any emergency card to inspect caller details and factor explanations.
+                  </div>
+                </div>
+                <span className="badge-tag" style={{ background: '#0369a1', color: '#e0f2fe' }}>
+                  {incidents.length} Consolidated Incidents
+                </span>
+              </div>
+
+              {incidents.length === 0 ? (
+                <div className="empty-state-card">
+                  <Play size={40} color="#38bdf8" style={{ marginBottom: 12 }} />
+                  <h3>No Reports Streamed Yet</h3>
+                  <p>
+                    Click the blue <strong>"START SIMULATION"</strong> button at the top to stream simulated
+                    incoming emergency calls!
+                  </p>
+                </div>
+              ) : (
+                <>
+                  <div className="incident-queue">
+                    {incidents.map((inc, idx) => {
+                      const isSelected = selectedIncident?.id === inc.id
+                      return (
+                        <div
+                          key={inc.id}
+                          className={`incident-item ${isSelected ? 'selected' : ''}`}
+                          onClick={() => setSelectedIncident(inc)}
+                        >
+                          <div className="incident-header">
+                            <div>
+                              <span style={{ fontWeight: 800, fontSize: 16, marginRight: 8 }}>
+                                #{idx + 1}
+                              </span>
+                              <span className={`badge-tag badge-${inc.need_type}`}>
+                                {inc.need_type}
+                              </span>
+                              <span
+                                style={{
+                                  fontSize: 15,
+                                  fontWeight: 700,
+                                  marginLeft: 10,
+                                  color: '#ffffff'
+                                }}
+                              >
+                                {inc.zone_name}
+                              </span>
+                            </div>
+
+                            <div className="priority-display">
+                              <span className="priority-val">{inc.priority_score.toFixed(2)}</span>
+                              <span className="priority-label">Score</span>
+                            </div>
+                          </div>
+
+                          <div
+                            style={{
+                              display: 'flex',
+                              gap: 16,
+                              fontSize: 13,
+                              color: '#94a3b8',
+                              margin: '6px 0'
+                            }}
+                          >
+                            <span>
+                              <Users size={14} style={{ verticalAlign: 'middle', marginRight: 4 }} />
+                              Est. {inc.estimated_people} people
+                            </span>
+                            <span>
+                              <Layers size={14} style={{ verticalAlign: 'middle', marginRight: 4 }} />
+                              {inc.report_ids?.length || 1} duplicate calls merged
+                            </span>
+                            <span>
+                              Trust: {Math.round(inc.reliability_score * 100)}%
+                            </span>
+                          </div>
+
+                          {inc.needs_human_check && (
+                            <span
+                              style={{
+                                display: 'inline-block',
+                                background: '#78350f',
+                                color: '#fde047',
+                                padding: '2px 8px',
+                                borderRadius: 4,
+                                fontSize: 11,
+                                fontWeight: 700,
+                                marginTop: 4
+                              }}
+                            >
+                              ⚠️ Vague Location ("near the temple") — Needs Human Check
+                            </span>
+                          )}
+
+                          {inc.status !== 'recommended' && (
+                            <span
+                              className={`status-pill status-${inc.status}`}
+                              style={{ marginLeft: 6 }}
+                            >
+                              {inc.status.toUpperCase()}
+                            </span>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+
+                  {/* "Why This Rank" Explanation Card */}
+                  {selectedIncident && (
+                    <div className="why-card">
+                      <div
+                        style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          marginBottom: 14
+                        }}
+                      >
+                        <div>
+                          <h3 style={{ margin: 0, fontSize: 18, color: '#38bdf8' }}>
+                            🔍 Explanation Breakdown ("Why This Rank?")
+                          </h3>
+                          <span style={{ fontSize: 12, color: '#94a3b8' }}>
+                            Incident: {selectedIncident.id} ({selectedIncident.zone_name})
+                          </span>
+                        </div>
+                        <span className={`status-pill status-${selectedIncident.status}`}>
+                          STATUS: {selectedIncident.status.toUpperCase()}
+                        </span>
+                      </div>
+
+                      {/* Factor bars */}
+                      <div style={{ marginBottom: 16 }}>
+                        <div className="factor-bar-row">
+                          <div className="factor-info">
+                            <span>
+                              <strong>Need Severity:</strong> {selectedIncident.need_type.toUpperCase()}
+                            </span>
+                            <span>{selectedIncident.factors?.need_severity}</span>
+                          </div>
+                          <div className="factor-bar-bg">
+                            <div
+                              className="factor-bar-fill"
+                              style={{
+                                width: `${(selectedIncident.factors?.need_severity / 0.3) * 100}%`,
+                                backgroundColor: '#ef4444'
+                              }}
+                            />
+                          </div>
+                        </div>
+
+                        <div className="factor-bar-row">
+                          <div className="factor-info">
+                            <span>
+                              <strong>People Affected:</strong> Est. {selectedIncident.estimated_people}
+                            </span>
+                            <span>{selectedIncident.factors?.people}</span>
+                          </div>
+                          <div className="factor-bar-bg">
+                            <div
+                              className="factor-bar-fill"
+                              style={{
+                                width: `${(selectedIncident.factors?.people / 0.25) * 100}%`,
+                                backgroundColor: '#f97316'
+                              }}
+                            />
+                          </div>
+                        </div>
+
+                        <div className="factor-bar-row">
+                          <div className="factor-info">
+                            <span>
+                              <strong>Vulnerable Groups:</strong>{' '}
+                              {selectedIncident.vulnerable_groups?.join(', ') || 'None reported'}
+                            </span>
+                            <span>{selectedIncident.factors?.vulnerable}</span>
+                          </div>
+                          <div className="factor-bar-bg">
+                            <div
+                              className="factor-bar-fill"
+                              style={{
+                                width: `${(selectedIncident.factors?.vulnerable / 0.2) * 100}%`,
+                                backgroundColor: '#eab308'
+                              }}
+                            />
+                          </div>
+                        </div>
+
+                        <div className="factor-bar-row">
+                          <div className="factor-info">
+                            <span>
+                              <strong>Corroboration:</strong> {selectedIncident.independent_sources} callers
+                            </span>
+                            <span>{selectedIncident.factors?.corroboration}</span>
+                          </div>
+                          <div className="factor-bar-bg">
+                            <div
+                              className="factor-bar-fill"
+                              style={{
+                                width: `${(selectedIncident.factors?.corroboration / 0.1) * 100}%`,
+                                backgroundColor: '#38bdf8'
+                              }}
+                            />
+                          </div>
+                        </div>
+
+                        <div className="factor-bar-row">
+                          <div className="factor-info">
+                            <span>
+                              <strong>Reliability Multiplier:</strong>
+                            </span>
+                            <span>{selectedIncident.factors?.reliability_mult}x</span>
+                          </div>
+                          <div className="factor-bar-bg">
+                            <div
+                              className="factor-bar-fill"
+                              style={{
+                                width: `${(selectedIncident.factors?.reliability_score || 0.5) * 100}%`,
+                                backgroundColor: '#10b981'
+                              }}
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Plain-Language Reasons */}
+                      <h5 style={{ color: '#94a3b8', marginBottom: 6 }}>Plain-Language Reasons:</h5>
+                      <ul style={{ fontSize: 13, paddingLeft: 18, marginBottom: 14 }}>
+                        {selectedIncident.reasons?.map((r, i) => (
+                          <li key={i} style={{ marginBottom: 3 }}>
+                            {r}
+                          </li>
+                        ))}
+                      </ul>
+
+                      {/* Merged Reports */}
+                      <h5 style={{ color: '#94a3b8', marginBottom: 6 }}>
+                        Original Duplicate Reports Combined ({selectedIncident.reports?.length || 1}):
+                      </h5>
+                      <div style={{ maxHeight: 120, overflowY: 'auto', marginBottom: 16 }}>
+                        {selectedIncident.reports?.map((rep) => (
+                          <div
+                            key={rep.id}
+                            style={{
+                              background: '#0f172a',
+                              border: '1px solid #1e293b',
+                              padding: 8,
+                              borderRadius: 6,
+                              marginBottom: 6,
+                              fontSize: 12
+                            }}
+                          >
+                            <div style={{ display: 'flex', justifyContent: 'space-between', color: '#94a3b8' }}>
+                              <span>
+                                {rep.id} | T+{rep.minute}m | {rep.channel}
+                              </span>
+                              <span>Place: {rep.place_text}</span>
+                            </div>
+                            <div style={{ color: '#f8fafc', marginTop: 3 }}>"{rep.text}"</div>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Action buttons */}
+                      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                        <button
+                          className="btn-primary"
+                          onClick={() =>
+                            handleAction('approve', 'Verified with field volunteer and approved for dispatch')
+                          }
+                        >
+                          ✓ Approve Dispatch
+                        </button>
+                        <button className="btn-secondary" onClick={() => setOverrideModalOpen(true)}>
+                          ✏️ Override Priority
+                        </button>
+                        <button
+                          className="btn-secondary"
+                          onClick={() => handleAction('merge', 'Merged manually with adjacent incident')}
+                        >
+                          Merge
+                        </button>
+                        <button
+                          className="btn-secondary"
+                          onClick={() => handleAction('split', 'Splitting multi-family cluster')}
+                        >
+                          Split
+                        </button>
+                        <button
+                          className="btn-danger"
+                          onClick={() => handleAction('dismiss', 'Determined duplicate hoax or resolved')}
+                        >
+                          Dismiss
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ========================================================================= */}
+        {/* TAB 2: BEFORE LANDFALL (PREPAREDNESS DIRECTIVES) */}
+        {/* ========================================================================= */}
+        {activeTab === 'before' && (
+          <div className="two-col-layout">
+            <div className="dashboard-card">
+              <div className="card-title">
+                <span>District Vulnerability & Risk Map (Offline Vector)</span>
+                <span style={{ fontSize: 13, color: '#94a3b8' }}>12 Preparedness Zones</span>
+              </div>
+
+              <div className="map-wrapper">
+                <MapContainer
+                  center={districtCenter}
+                  zoom={10}
+                  style={{ height: '100%', width: '100%', background: '#090d16' }}
+                  attributionControl={false}
+                >
+                  {showOsmTiles && (
+                    <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+                  )}
+
+                  {district?.zones?.map((zone) => (
+                    <Polygon
+                      key={zone.id}
+                      positions={zone.polygon}
+                      pathOptions={{
+                        color: zone.is_silent ? '#f97316' : getZoneColor(zone.risk_score),
+                        weight: zone.is_silent ? 3 : 2,
+                        dashArray: zone.is_silent ? '6, 6' : undefined,
+                        fillColor: getZoneColor(zone.risk_score),
+                        fillOpacity: 0.45
+                      }}
+                    >
+                      <Tooltip permanent direction="center">
+                        <span style={{ fontWeight: 700 }}>
+                          {zone.id}: {zone.name}
+                        </span>
+                        <br />
+                        Risk: {Math.round(zone.risk_score * 100)}%
+                        {zone.is_silent && ' [BLACKOUT RISK]'}
+                      </Tooltip>
+                    </Polygon>
+                  ))}
+                </MapContainer>
+              </div>
+
+              <h4 style={{ marginTop: 20, marginBottom: 8 }}>Zone Vulnerability Breakdown</h4>
+              <div style={{ maxHeight: 220, overflowY: 'auto' }}>
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th>Zone</th>
+                      <th>Risk</th>
+                      <th>Key Risk Factors</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {district?.zones
+                      ?.slice()
+                      .sort((a, b) => b.risk_score - a.risk_score)
+                      .map((z) => (
+                        <tr key={z.id}>
+                          <td>
+                            <strong>{z.name}</strong> ({z.id})
+                            {z.is_silent && (
+                              <span style={{ display: 'block', color: '#f97316', fontSize: 12 }}>
+                                ⚡ Planted Silent Zone
+                              </span>
+                            )}
+                          </td>
+                          <td>
+                            <strong style={{ color: getZoneColor(z.risk_score), fontSize: 16 }}>
+                              {Math.round(z.risk_score * 100)}%
+                            </strong>
+                          </td>
+                          <td style={{ fontSize: 12, color: '#94a3b8' }}>
+                            Elev: {z.elevation_m}m | Shelter: {z.dist_to_shelter_km}km | Mobile: {Math.round(z.connectivity * 100)}%
+                          </td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div className="dashboard-card">
+              <div className="card-title">
+                <span>Official Warning & Targeted Preparedness Directives</span>
+              </div>
+
+              <form onSubmit={handleDraftWarning} style={{ marginBottom: 20 }}>
+                <div className="form-group">
+                  <label>Cyclone Identifier:</label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    value={warningForm.cyclone_name}
+                    onChange={(e) => setWarningForm({ ...warningForm, cyclone_name: e.target.value })}
+                  />
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                  <div className="form-group">
+                    <label>Expected Landfall Time:</label>
+                    <input
+                      type="text"
+                      className="form-input"
+                      value={warningForm.expected_landfall_time}
+                      onChange={(e) =>
+                        setWarningForm({ ...warningForm, expected_landfall_time: e.target.value })
+                      }
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label>Severity Category:</label>
+                    <input
+                      type="text"
+                      className="form-input"
+                      value={warningForm.category}
+                      onChange={(e) => setWarningForm({ ...warningForm, category: e.target.value })}
+                    />
+                  </div>
+                </div>
+                <button type="submit" className="btn-primary" style={{ width: '100%', padding: '12px' }}>
+                  Generate Targeted Preparedness Drafts
+                </button>
+              </form>
+
+              <h4>Zone-Specific Preparedness Directives</h4>
+              <p style={{ fontSize: 13, color: '#94a3b8', marginBottom: 12 }}>
+                Generated from each zone's specific vulnerabilities. Human approval required before dispatch.
+              </p>
+
+              <div style={{ maxHeight: 340, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 12 }}>
+                {alerts.length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: 30, color: '#94a3b8' }}>
+                    No alerts drafted yet. Click "Generate Targeted Preparedness Drafts" above.
+                  </div>
+                ) : (
+                  alerts.map((alt) => (
+                    <div
+                      key={alt.id}
+                      style={{
+                        backgroundColor: '#172033',
+                        border: '1px solid #334155',
+                        borderRadius: 8,
+                        padding: 12
+                      }}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                        <strong>{alt.zone_name}</strong>
+                        <span className={`status-pill ${alt.status === 'approved' ? 'status-approved' : 'status-draft'}`}>
+                          {alt.status.toUpperCase()}
+                        </span>
+                      </div>
+                      <pre style={{ whiteSpace: 'pre-wrap', fontSize: 12, background: '#0f172a', padding: 8, borderRadius: 6, color: '#cbd5e1' }}>
+                        {alt.message}
+                      </pre>
+                      <div style={{ marginTop: 8, textAlign: 'right' }}>
+                        {alt.status === 'draft' ? (
+                          <button
+                            className="btn-primary"
+                            style={{ padding: '6px 12px', fontSize: 12 }}
+                            onClick={() => handleApproveAlert(alt.id)}
+                          >
+                            ✓ Approve Directive
+                          </button>
+                        ) : (
+                          <span style={{ fontSize: 12, color: '#34d399', fontWeight: 600 }}>
+                            ✓ Authorized for Dispatch
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ========================================================================= */}
+        {/* TAB 3: RESULTS & EVALUATION METRICS */}
+        {/* ========================================================================= */}
+        {activeTab === 'results' && (
+          <div>
+            <div
+              style={{
+                background: '#1e293b',
+                border: '1px solid #334155',
+                padding: '12px 18px',
+                borderRadius: 8,
+                marginBottom: 20,
+                color: '#fde047',
+                fontSize: 14,
+                fontWeight: 600
+              }}
+            >
+              ⚠️ CAVEAT: Evaluated on simulated data with self-generated ground truth. All metrics are computed live from truth.json.
+            </div>
+
+            {metrics && (
+              <div>
+                <div
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
+                    gap: 16,
+                    marginBottom: 24
+                  }}
+                >
+                  <div className="dashboard-card">
+                    <span style={{ fontSize: 13, color: '#94a3b8' }}>Duplicate-Merge F1 Score</span>
+                    <div style={{ fontSize: 32, fontWeight: 800, color: '#38bdf8' }}>
+                      {metrics.duplicate_merge.f1}
+                    </div>
+                    <div style={{ fontSize: 12, color: '#22c55e', marginTop: 4 }}>
+                      Compression: {metrics.duplicate_merge.compression_ratio}x volume reduction
+                    </div>
+                  </div>
+
+                  <div className="dashboard-card">
+                    <span style={{ fontSize: 13, color: '#94a3b8' }}>Top-10 Overlap with Hidden Ground Truth</span>
+                    <div style={{ fontSize: 32, fontWeight: 800, color: '#22c55e' }}>
+                      {Math.round(metrics.expert_ranking_top10_overlap.system * 100)}%
+                    </div>
+                    <div style={{ fontSize: 12, color: '#94a3b8' }}>
+                      Raw Volume Baseline: {Math.round(metrics.expert_ranking_top10_overlap.baseline * 100)}%
+                    </div>
+                  </div>
+
+                  <div className="dashboard-card">
+                    <span style={{ fontSize: 13, color: '#94a3b8' }}>Silent High-Risk Zones Flagged</span>
+                    <div style={{ fontSize: 32, fontWeight: 800, color: '#f97316' }}>
+                      {metrics.silent_zones_flagged.system_flagged} / {metrics.silent_zones_flagged.total_planted}
+                    </div>
+                    <div style={{ fontSize: 12, color: '#ef4444' }}>
+                      Raw Volume Baseline: {metrics.silent_zones_flagged.baseline_flagged} (Ignored due to 0 calls)
+                    </div>
+                  </div>
+
+                  <div className="dashboard-card">
+                    <span style={{ fontSize: 13, color: '#94a3b8' }}>Location Safety (No Fake Pins)</span>
+                    <div style={{ fontSize: 32, fontWeight: 800, color: '#38bdf8' }}>
+                      {metrics.location_resolution.percent_resolved}%
+                    </div>
+                    <div style={{ fontSize: 12, color: '#94a3b8' }}>
+                      Needs Human Check: {(100 - metrics.location_resolution.percent_resolved).toFixed(1)}%
+                    </div>
+                  </div>
+                </div>
+
+                {/* Comparison Chart */}
+                <div className="dashboard-card" style={{ marginBottom: 24 }}>
+                  <div className="card-title">
+                    <span>Lifeline Triage System vs. Raw Call Volume Baseline</span>
+                  </div>
+                  <div style={{ height: 300, width: '100%' }}>
+                    <ResponsiveContainer>
+                      <BarChart
+                        data={[
+                          {
+                            metric: 'Top-10 Overlap (%)',
+                            LifelineSystem: Math.round(metrics.expert_ranking_top10_overlap.system * 100),
+                            BaselineVolume: Math.round(metrics.expert_ranking_top10_overlap.baseline * 100)
+                          },
+                          {
+                            metric: 'Silent Zones Flagged (%)',
+                            LifelineSystem:
+                              (metrics.silent_zones_flagged.system_flagged / metrics.silent_zones_flagged.total_planted) * 100,
+                            BaselineVolume:
+                              (metrics.silent_zones_flagged.baseline_flagged / metrics.silent_zones_flagged.total_planted) * 100
+                          },
+                          {
+                            metric: 'Need Accuracy (%)',
+                            LifelineSystem: Math.round(metrics.extraction_accuracy.need_type_accuracy * 100),
+                            BaselineVolume: 0
+                          },
+                          {
+                            metric: 'People Count Acc (%)',
+                            LifelineSystem: Math.round(metrics.extraction_accuracy.people_count_accuracy * 100),
+                            BaselineVolume: 0
+                          }
+                        ]}
+                      >
+                        <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
+                        <XAxis dataKey="metric" stroke="#94a3b8" />
+                        <YAxis stroke="#94a3b8" />
+                        <RechartsTooltip contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155' }} />
+                        <Legend />
+                        <Bar dataKey="LifelineSystem" fill="#38bdf8" name="Lifeline Triage (Ours)" />
+                        <Bar dataKey="BaselineVolume" fill="#f87171" name="Raw Call Volume Baseline" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ========================================================================= */}
+        {/* TAB 4: AUDIT LOG */}
+        {/* ========================================================================= */}
+        {activeTab === 'audit' && (
+          <div className="dashboard-card">
+            <div className="card-title">
+              <span>Human-in-the-Loop Decision Audit Log</span>
+              <span style={{ fontSize: 13, color: '#94a3b8' }}>
+                Every coordinator action is logged with mandatory rationale
+              </span>
+            </div>
+
+            {auditLogs.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: 40, color: '#94a3b8' }}>
+                No actions taken yet. Go to <strong>Live Triage Queue</strong>, select an incident, and click Approve, Override, Merge, or Dismiss.
+              </div>
+            ) : (
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Timestamp</th>
+                    <th>User</th>
+                    <th>Action</th>
+                    <th>Incident ID</th>
+                    <th>Mandatory Reason</th>
+                    <th>New Priority</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {auditLogs.map((log) => (
+                    <tr key={log.id}>
+                      <td style={{ color: '#94a3b8', fontSize: 13 }}>{log.timestamp}</td>
+                      <td>
+                        <strong>{log.user}</strong>
+                      </td>
+                      <td>
+                        <span className={`status-pill status-${log.action_type}`}>{log.action_type.toUpperCase()}</span>
+                      </td>
+                      <td>{log.incident_id}</td>
+                      <td>{log.reason}</td>
+                      <td>{log.new_priority !== null && log.new_priority !== undefined ? Number(log.new_priority).toFixed(2) : '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        )}
+      </main>
+
+      {/* Override Priority Modal */}
+      {overrideModalOpen && (
+        <div className="modal-backdrop">
+          <div className="modal-content">
+            <h3>Manual Priority Override</h3>
+            <p style={{ fontSize: 13, color: '#94a3b8', marginBottom: 14 }}>
+              Human in the loop: provide mandatory justification for changing recommendation priority.
+            </p>
+
+            <div className="form-group">
+              <label>New Priority Score (0.0 to 1.0):</label>
+              <input
+                type="number"
+                step="0.05"
+                min="0.0"
+                max="1.0"
+                className="form-input"
+                value={overridePriority}
+                onChange={(e) => setOverridePriority(Number(e.target.value))}
+              />
+            </div>
+
+            <div className="form-group">
+              <label>Mandatory Justification / Field Verification Reason:</label>
+              <textarea
+                className="form-textarea"
+                rows={3}
+                placeholder="e.g. Field coordinator contacted school master; confirmed water entered generator room."
+                value={overrideReason}
+                onChange={(e) => setOverrideReason(e.target.value)}
+              />
+            </div>
+
+            <div className="modal-actions">
+              <button className="btn-secondary" onClick={() => setOverrideModalOpen(false)}>
+                Cancel
+              </button>
+              <button
+                className="btn-primary"
+                onClick={() => handleAction('override', overrideReason, overridePriority)}
+              >
+                Record Override
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Citizen Mobile Phone SMS Inbox Notification Simulator */}
+      {citizenInboxModal && (
+        <div className="modal-backdrop">
+          <div className="phone-mockup-modal">
+            <div className="phone-speaker-notch" />
+            <div className="phone-screen">
+              <div className="phone-status-bar">
+                <span>9:41 AM</span>
+                <span>📶 4G &nbsp; 🔋 85%</span>
+              </div>
+
+              <div className="phone-message-header">
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div className="phone-avatar-icon">
+                    <ShieldAlert size={20} color="#ffffff" />
+                  </div>
+                  <div>
+                    <strong style={{ fontSize: 14, color: '#0f172a', display: 'block' }}>
+                      {citizenInboxModal.sender}
+                    </strong>
+                    <span style={{ fontSize: 11, color: '#64748b' }}>
+                      {citizenInboxModal.phone}
+                    </span>
+                  </div>
+                </div>
+                <span className="badge-tag" style={{ background: '#dc2626', color: '#ffffff', fontSize: 10 }}>
+                  LIVE BROADCAST
+                </span>
+              </div>
+
+              <div className="phone-body">
+                <div className="phone-timestamp">Today {citizenInboxModal.time}</div>
+
+                <div className="phone-speech-bubble">
+                  <div className="bubble-title">
+                    <Bell size={15} color="#dc2626" />
+                    <strong>{citizenInboxModal.title}</strong>
+                  </div>
+                  <p className="bubble-body-text">{citizenInboxModal.body}</p>
+                  <div className="bubble-footer">
+                    <span>Target Zone: {citizenInboxModal.zone}</span>
+                    <span>Delivered ✓✓</span>
+                  </div>
+                </div>
+
+                <div className="phone-safety-tips">
+                  <strong>⚠️ Immediate Citizen Action:</strong>
+                  <ul>
+                    <li>Stay indoors on the highest floor of concrete buildings.</li>
+                    <li>Do not walk or drive through flowing water.</li>
+                    <li>Keep mobile phones charged and save battery.</li>
+                  </ul>
+                </div>
+              </div>
+
+              <button className="phone-dismiss-btn" onClick={() => setCitizenInboxModal(null)}>
+                ✓ Acknowledge & Close Phone Preview
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}

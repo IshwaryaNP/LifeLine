@@ -1,0 +1,193 @@
+{
+  "notice": "HUMAN BENCHMARK NOTE: Generated from hidden formula (severity x people x vulnerability). In a real deployment, a domain expert/coordinator who did not build the system should replace this with a manual ground truth ranking before operational sign-off.",
+  "top_15": [
+    {
+      "rank": 1,
+      "incident_id": "INC-001",
+      "zone_id": "Z01",
+      "hidden_score": 15.36,
+      "true_severity": 4,
+      "true_people": 35,
+      "true_need": "rescue",
+      "true_vulnerable": [
+        "pregnant",
+        "children"
+      ]
+    },
+    {
+      "rank": 2,
+      "incident_id": "INC-012",
+      "zone_id": "Z04",
+      "hidden_score": 15.36,
+      "true_severity": 4,
+      "true_people": 35,
+      "true_need": "medical",
+      "true_vulnerable": [
+        "pregnant",
+        "children"
+      ]
+    },
+    {
+      "rank": 3,
+      "incident_id": "INC-024",
+      "zone_id": "Z07",
+      "hidden_score": 12.48,
+      "true_severity": 5,
+      "true_people": 14,
+      "true_need": "medical",
+      "true_vulnerable": [
+        "children",
+        "elderly"
+      ]
+    },
+    {
+      "rank": 4,
+      "incident_id": "INC-005",
+      "zone_id": "Z02",
+      "hidden_score": 12.22,
+      "true_severity": 5,
+      "true_people": 22,
+      "true_need": "medical",
+      "true_vulnerable": [
+        "children"
+      ]
+    },
+    {
+      "rank": 5,
+      "incident_id": "INC-027",
+      "zone_id": "Z08",
+      "hidden_score": 11.7,
+      "true_severity": 5,
+      "true_people": 20,
+      "true_need": "medical",
+      "true_vulnerable": [
+        "pregnant"
+      ]
+    },
+    {
+      "rank": 6,
+      "incident_id": "INC-037",
+      "zone_id": "Z10",
+      "hidden_score": 10.56,
+      "true_severity": 5,
+      "true_people": 8,
+      "true_need": "food",
+      "true_vulnerable": [
+        "children",
+        "elderly"
+      ]
+    },
+    {
+      "rank": 7,
+      "incident_id": "INC-025",
+      "zone_id": "Z08",
+      "hidden_score": 10.24,
+      "true_severity": 4,
+      "true_people": 15,
+      "true_need": "medical",
+      "true_vulnerable": [
+        "elderly",
+        "disabled"
+      ]
+    },
+    {
+      "rank": 8,
+      "incident_id": "INC-013",
+      "zone_id": "Z04",
+      "hidden_score": 10.14,
+      "true_severity": 5,
+      "true_people": 14,
+      "true_need": "rescue",
+      "true_vulnerable": [
+        "disabled"
+      ]
+    },
+    {
+      "rank": 9,
+      "incident_id": "INC-031",
+      "zone_id": "Z09",
+      "hidden_score": 9.776,
+      "true_severity": 4,
+      "true_people": 22,
+      "true_need": "medical",
+      "true_vulnerable": [
+        "children"
+      ]
+    },
+    {
+      "rank": 10,
+      "incident_id": "INC-032",
+      "zone_id": "Z09",
+      "hidden_score": 9.776,
+      "true_severity": 4,
+      "true_people": 22,
+      "true_need": "water",
+      "true_vulnerable": [
+        "disabled"
+      ]
+    },
+    {
+      "rank": 11,
+      "incident_id": "INC-023",
+      "zone_id": "Z07",
+      "hidden_score": 9.728,
+      "true_severity": 4,
+      "true_people": 13,
+      "true_need": "rescue",
+      "true_vulnerable": [
+        "pregnant",
+        "children"
+      ]
+    },
+    {
+      "rank": 12,
+      "incident_id": "INC-007",
+      "zone_id": "Z03",
+      "hidden_score": 9.568,
+      "true_severity": 4,
+      "true_people": 21,
+      "true_need": "medical",
+      "true_vulnerable": [
+        "pregnant"
+      ]
+    },
+    {
+      "rank": 13,
+      "incident_id": "INC-028",
+      "zone_id": "Z08",
+      "hidden_score": 9.568,
+      "true_severity": 4,
+      "true_people": 21,
+      "true_need": "shelter",
+      "true_vulnerable": [
+        "disabled"
+      ]
+    },
+    {
+      "rank": 14,
+      "incident_id": "INC-021",
+      "zone_id": "Z06",
+      "hidden_score": 9.216,
+      "true_severity": 4,
+      "true_people": 11,
+      "true_need": "water",
+      "true_vulnerable": [
+        "elderly",
+        "disabled"
+      ]
+    },
+    {
+      "rank": 15,
+      "incident_id": "INC-038",
+      "zone_id": "Z10",
+      "hidden_score": 9.216,
+      "true_severity": 3,
+      "true_people": 23,
+      "true_need": "rescue",
+      "true_vulnerable": [
+        "children",
+        "elderly"
+      ]
+    }
+  ]
+}
