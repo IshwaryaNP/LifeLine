@@ -9,7 +9,7 @@ import {
   MapPin, Radio, Compass, RefreshCw, Eye, EyeOff, Layers, ExternalLink,
   Check, ThumbsUp, ShieldCheck, LayoutDashboard, Search, Bell, Settings,
   Filter, HelpCircle, Send, User, ChevronDown, BarChart3, AlertOctagon, LifeBuoy,
-  Wind, Navigation, Smartphone, Megaphone
+  Wind, Navigation, Smartphone, Megaphone, Truck, Anchor
 } from 'lucide-react';
 
 const API_BASE = import.meta.env.VITE_API_URL || '';
@@ -109,11 +109,12 @@ export default function App() {
   const [activeNeedFilter, setActiveNeedFilter] = useState('all');
   const [cycloneTrack, setCycloneTrack] = useState(null);
   const [alertsList, setAlertsList] = useState([]);
+  const [resourcesList, setResourcesList] = useState([]);
 
   // Fetch initial data
   const fetchData = async () => {
     try {
-      const [distRes, incRes, silRes, audRes, metRes, simRes, cycRes, altRes] = await Promise.all([
+      const [distRes, incRes, silRes, audRes, metRes, simRes, cycRes, altRes, resRes] = await Promise.all([
         fetch(`${API_BASE}/api/district`).then(r => r.json()).catch(() => null),
         fetch(`${API_BASE}/api/incidents`).then(r => r.json()).catch(() => []),
         fetch(`${API_BASE}/api/silence`).then(r => r.json()).catch(() => []),
@@ -121,11 +122,13 @@ export default function App() {
         fetch(`${API_BASE}/api/metrics`).then(r => r.json()).catch(() => null),
         fetch(`${API_BASE}/api/simulation/state`).then(r => r.json()).catch(() => ({ is_running: false, current_step: 0 })),
         fetch(`${API_BASE}/api/cyclone/track`).then(r => r.json()).catch(() => null),
-        fetch(`${API_BASE}/api/alerts`).then(r => r.json()).catch(() => [])
+        fetch(`${API_BASE}/api/alerts`).then(r => r.json()).catch(() => []),
+        fetch(`${API_BASE}/api/resources`).then(r => r.json()).catch(() => [])
       ]);
 
       if (cycRes) setCycloneTrack(cycRes);
       if (Array.isArray(altRes)) setAlertsList(altRes);
+      if (Array.isArray(resRes)) setResourcesList(resRes);
 
       if (distRes) {
         // Normalize raw district data into GeoJSON FeatureCollection if needed
@@ -377,6 +380,15 @@ export default function App() {
             </button>
 
             <button 
+              className={`sidebar-nav-item ${activeTab === 'dispatch' ? 'active' : ''}`}
+              onClick={() => setActiveTab('dispatch')}
+            >
+              <Truck size={18} />
+              <span>Rescue Dispatch</span>
+              <span className="nav-tag green">{resourcesList.filter(r => r.status === 'ready').length || 6} Ready</span>
+            </button>
+
+            <button 
               className={`sidebar-nav-item ${activeTab === 'proof' ? 'active' : ''}`}
               onClick={() => { setActiveTab('proof'); setCurrentStep(3); }}
             >
@@ -431,6 +443,7 @@ export default function App() {
               {activeTab === 'cyclone' && 'Cyclone Approach Track & Early Warning Alerts'}
               {activeTab === 'prepare' && 'Step 1: Blackout Zones Preparation'}
               {activeTab === 'respond' && 'Step 2: Emergency Response Triage'}
+              {activeTab === 'dispatch' && 'Automated Resource Dispatch & Fleet Allocation'}
               {activeTab === 'proof' && 'Step 3: Benchmark Proof & Accuracy'}
             </h2>
             <span className="top-subtitle-path">Cyclone Biparjoy Command Center • Srikakulam District</span>
@@ -553,6 +566,16 @@ export default function App() {
                     setActiveTab('proof');
                     setCurrentStep(3);
                   }}
+                />
+              )}
+
+              {activeTab === 'dispatch' && (
+                <ScreenDispatch 
+                  resourcesList={resourcesList}
+                  incidents={filteredIncidents}
+                  district={district}
+                  onResourceUpdated={fetchData}
+                  onShowToast={showToast}
                 />
               )}
 
@@ -2389,4 +2412,260 @@ function ScreenCycloneTrack({ cycloneTrack, alertsList, district, onAlertBroadca
     </div>
   );
 }
+
+// ----------------------------------------------------------------------------
+// SCREEN: AI AUTOMATED RESOURCE DISPATCH & FLEET ALLOCATION
+// ----------------------------------------------------------------------------
+function ScreenDispatch({ resourcesList, incidents, district, onResourceUpdated, onShowToast }) {
+  const [selectedIncidentForDispatch, setSelectedIncidentForDispatch] = useState(incidents[0] || null);
+  const [recommendations, setRecommendations] = useState([]);
+  const [dispatchingUnitId, setDispatchingUnitId] = useState(null);
+
+  // Load recommendations whenever selected incident changes
+  useEffect(() => {
+    if (selectedIncidentForDispatch) {
+      fetch(`${API_BASE}/api/dispatch/recommend/${selectedIncidentForDispatch.id}`)
+        .then(r => r.json())
+        .then(data => {
+          if (Array.isArray(data)) setRecommendations(data);
+        })
+        .catch(() => setRecommendations([]));
+    }
+  }, [selectedIncidentForDispatch]);
+
+  const handleDispatch = async (rec) => {
+    if (!selectedIncidentForDispatch) return;
+    try {
+      setDispatchingUnitId(rec.resource_id);
+      const res = await fetch(`${API_BASE}/api/dispatch/assign`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          resource_id: rec.resource_id,
+          incident_id: selectedIncidentForDispatch.id,
+          zone_name: selectedIncidentForDispatch.zone_name,
+          eta_minutes: rec.eta_minutes
+        })
+      });
+      const data = await res.json();
+      if (data.success) {
+        onShowToast(`🚨 ${rec.resource_name} dispatched to ${selectedIncidentForDispatch.zone_name} (ETA: ${rec.eta_minutes} mins)!`);
+        onResourceUpdated?.();
+      }
+    } catch {
+      onShowToast("Failed to dispatch unit.");
+    } finally {
+      setDispatchingUnitId(null);
+    }
+  };
+
+  const handleRecall = async (resourceId) => {
+    try {
+      const res = await fetch(`${API_BASE}/api/dispatch/recall/${resourceId}`, { method: 'POST' });
+      const data = await res.json();
+      if (data.success) {
+        onShowToast(`Unit returned to standby ready status.`);
+        onResourceUpdated?.();
+      }
+    } catch {
+      onShowToast("Failed to recall unit.");
+    }
+  };
+
+  return (
+    <div className="cyclone-screen-container">
+      {/* Header Banner */}
+      <div className="cyclone-header-banner" style={{ background: 'linear-gradient(135deg, #064e3b 0%, #0f172a 100%)' }}>
+        <div className="cyclone-title-row">
+          <div className="cyclone-radar-pulse-icon" style={{ background: 'radial-gradient(circle, #10b981 0%, #047857 100%)' }}>
+            <Truck size={26} color="#ffffff" />
+          </div>
+          <div>
+            <span className="cyclone-badge-cat" style={{ background: '#059669' }}>AI Tactical Dispatch</span>
+            <h1 className="cyclone-main-title">Automated Resource Matching & Fleet Routing</h1>
+            <p className="cyclone-bulletin-id">
+              Real-time proximity calculations, transit ETAs, and capability matching for NDRF, Coast Guard, & Trauma Units
+            </p>
+          </div>
+        </div>
+
+        <div className="cyclone-header-stats">
+          <div className="cyclone-stat-box">
+            <span className="stat-label">Ready Units</span>
+            <span className="stat-val" style={{ color: '#34d399' }}>
+              {resourcesList.filter(r => r.status === 'ready').length}
+            </span>
+          </div>
+          <div className="cyclone-stat-box">
+            <span className="stat-label">Active Missions</span>
+            <span className="stat-val red">
+              {resourcesList.filter(r => r.status === 'dispatched').length}
+            </span>
+          </div>
+          <div className="cyclone-stat-box">
+            <span className="stat-label">Queue Demand</span>
+            <span className="stat-val">{incidents.length} incidents</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Main 2-Column Split: Incidents Queue on Left, Recommended Units on Right */}
+      <div className="cyclone-grid-layout">
+        {/* Left Column: Target Incidents Selection */}
+        <div className="cyclone-card">
+          <div className="cyclone-card-header">
+            <span className="cyclone-card-title">
+              <AlertOctagon size={18} color="#dc2626" />
+              1. Select Priority Incident to Dispatch
+            </span>
+            <span className="stat-label">Sorted by Urgency</span>
+          </div>
+
+          <div style={{ padding: '14px', display: 'flex', flexDirection: 'column', gap: '10px', maxHeight: '520px', overflowY: 'auto' }}>
+            {incidents.slice(0, 10).map((inc) => {
+              const isSelected = selectedIncidentForDispatch?.id === inc.id;
+              return (
+                <div
+                  key={inc.id}
+                  onClick={() => setSelectedIncidentForDispatch(inc)}
+                  style={{
+                    padding: '12px 16px',
+                    borderRadius: '10px',
+                    border: isSelected ? '2px solid #2563eb' : '1px solid #e2e8f0',
+                    background: isSelected ? '#eff6ff' : '#ffffff',
+                    cursor: 'pointer',
+                    transition: 'all 0.15s ease'
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                    <strong style={{ fontSize: '14px', color: '#0f172a' }}>
+                      {inc.id} • {inc.zone_name}
+                    </strong>
+                    <span
+                      style={{
+                        fontSize: '11px',
+                        fontWeight: 700,
+                        padding: '2px 8px',
+                        borderRadius: '12px',
+                        background: inc.priority_score >= 0.7 ? '#fee2e2' : '#fef3c7',
+                        color: inc.priority_score >= 0.7 ? '#b91c1c' : '#b45309'
+                      }}
+                    >
+                      Priority: {Math.round(inc.priority_score * 100)}%
+                    </span>
+                  </div>
+
+                  <p style={{ fontSize: '13px', color: '#475569', margin: '4px 0' }}>
+                    <strong>Need:</strong> {inc.need_type?.toUpperCase()} — {inc.estimated_people} people affected
+                  </p>
+                  <p style={{ fontSize: '12px', color: '#64748b' }}>
+                    {inc.reasons?.[0] || 'Urgent distress calls verified across multiple channels.'}
+                  </p>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Right Column: AI Recommended Field Units */}
+        <div className="alert-delivery-panel">
+          <div className="cyclone-card">
+            <div className="cyclone-card-header">
+              <span className="cyclone-card-title">
+                <Navigation size={18} color="#059669" />
+                2. AI Recommended Response Units
+              </span>
+              <span className="stat-label">Optimal Transit Time</span>
+            </div>
+
+            <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '14px', maxHeight: '520px', overflowY: 'auto' }}>
+              {selectedIncidentForDispatch && (
+                <div style={{ background: '#f8fafc', padding: '10px 14px', borderRadius: '8px', border: '1px solid #cbd5e1' }}>
+                  <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 600 }}>TARGET INCIDENT:</span>
+                  <div style={{ fontSize: '14px', fontWeight: 700, color: '#0f172a', marginTop: '2px' }}>
+                    {selectedIncidentForDispatch.id} in {selectedIncidentForDispatch.zone_name} ({selectedIncidentForDispatch.need_type?.toUpperCase()})
+                  </div>
+                </div>
+              )}
+
+              {recommendations.length === 0 ? (
+                <div className="empty-state">
+                  <RefreshCw className="spin" size={24} />
+                  <p>Calculating optimal route & availability...</p>
+                </div>
+              ) : (
+                recommendations.map((rec) => {
+                  const isUnitDispatched = rec.status === 'dispatched';
+                  return (
+                    <div 
+                      key={rec.resource_id} 
+                      className="alert-item-card"
+                      style={{ borderLeft: rec.suitability_score >= 0.9 ? '4px solid #10b981' : '4px solid #94a3b8' }}
+                    >
+                      <div className="alert-item-top">
+                        <div>
+                          <strong style={{ fontSize: '14px', color: '#0f172a' }}>{rec.resource_name}</strong>
+                          <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>
+                            {rec.type_label} • Base: {rec.distance_km} km away
+                          </div>
+                        </div>
+
+                        <span className={`alert-status-pill ${rec.status}`}>
+                          {rec.status === 'ready' ? 'READY' : 'ON MISSION'}
+                        </span>
+                      </div>
+
+                      <div style={{ display: 'flex', gap: '16px', margin: '8px 0', fontSize: '12px', color: '#334155' }}>
+                        <div><strong>Transit ETA:</strong> <span style={{ color: '#059669', fontWeight: 700 }}>~{rec.eta_minutes} mins</span></div>
+                        <div><strong>Match Score:</strong> <span style={{ color: '#2563eb', fontWeight: 700 }}>{Math.round(rec.suitability_score * 100)}%</span></div>
+                      </div>
+
+                      <p style={{ fontSize: '12px', color: '#64748b', marginBottom: '12px' }}>
+                        {rec.rationale}
+                      </p>
+
+                      <div className="alert-actions-row">
+                        {isUnitDispatched ? (
+                          <button
+                            type="button"
+                            className="btn btn-secondary"
+                            style={{ fontSize: '12px', padding: '6px 14px' }}
+                            onClick={() => handleRecall(rec.resource_id)}
+                          >
+                            Recall Unit to Base
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            className="btn btn-primary"
+                            style={{ fontSize: '12px', padding: '8px 16px', background: '#059669', borderColor: '#047857' }}
+                            disabled={dispatchingUnitId === rec.resource_id}
+                            onClick={() => handleDispatch(rec)}
+                          >
+                            {dispatchingUnitId === rec.resource_id ? (
+                              <>
+                                <RefreshCw className="spin" size={13} />
+                                Routing Unit...
+                              </>
+                            ) : (
+                              <>
+                                <Send size={13} />
+                                Authorize & Dispatch Unit
+                              </>
+                            )}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 

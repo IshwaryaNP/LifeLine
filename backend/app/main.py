@@ -203,3 +203,49 @@ def broadcast_alert(alert_id: str):
         "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat()
     }
 
+# 10. AI Dispatch & Resource Allocation
+from app.dispatch import dispatch_manager
+
+class DispatchAssignRequest(BaseModel):
+    resource_id: str
+    incident_id: str
+    zone_name: str
+    eta_minutes: int
+
+@app.get("/api/resources")
+def list_resources():
+    return dispatch_manager.get_resources()
+
+@app.get("/api/dispatch/recommend/{incident_id}")
+def get_dispatch_recommendations(incident_id: str):
+    with sim_manager.lock:
+        inc = next((i for i in sim_manager.incidents if i["id"] == incident_id), None)
+    if not inc:
+        raise HTTPException(status_code=404, detail="Incident not found")
+    return dispatch_manager.recommend_dispatch(inc)
+
+@app.post("/api/dispatch/assign")
+def assign_dispatch_unit(req: DispatchAssignRequest):
+    result = dispatch_manager.dispatch_unit(
+        resource_id=req.resource_id,
+        incident_id=req.incident_id,
+        zone_name=req.zone_name,
+        eta_minutes=req.eta_minutes
+    )
+    # Log in audit trail
+    save_audit_action({
+        "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        "incident_id": req.incident_id,
+        "action_type": "dispatch_unit",
+        "reason": f"Dispatched unit {req.resource_id} with ETA {req.eta_minutes} mins to {req.zone_name}",
+        "new_priority": None,
+        "target_id": req.resource_id,
+        "user": "Incident Commander"
+    })
+    return result
+
+@app.post("/api/dispatch/recall/{resource_id}")
+def recall_dispatch_unit(resource_id: str):
+    return dispatch_manager.recall_unit(resource_id)
+
+
