@@ -1,0 +1,20 @@
+# Netlify Configuration for Lifeline Triage Frontend
+
+[build]
+  base = "frontend"
+  publish = "dist"
+  command = "npm run build"
+
+# Single Page Application (SPA) redirect rule
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+# Proxy backend API requests (if backend is deployed e.g. on Render/Railway)
+# Example:
+# [[redirects]]
+#   from = "/api/*"
+#   to = "https://your-backend-service.onrender.com/api/:splat"
+#   status = 200
+#   force = true

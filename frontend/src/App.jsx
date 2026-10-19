@@ -12,6 +12,8 @@ import {
   Wind, Navigation, Smartphone, Megaphone
 } from 'lucide-react';
 
+const API_BASE = import.meta.env.VITE_API_URL || '';
+
 // Plain-language formatters
 const NEED_CONFIG = {
   rescue: { label: 'People trapped by floodwater', badge: 'Rescue', color: '#c53030', bg: '#fff5f5' },
@@ -112,14 +114,14 @@ export default function App() {
   const fetchData = async () => {
     try {
       const [distRes, incRes, silRes, audRes, metRes, simRes, cycRes, altRes] = await Promise.all([
-        fetch('/api/district').then(r => r.json()).catch(() => null),
-        fetch('/api/incidents').then(r => r.json()).catch(() => []),
-        fetch('/api/silence').then(r => r.json()).catch(() => []),
-        fetch('/api/audit').then(r => r.json()).catch(() => []),
-        fetch('/api/metrics').then(r => r.json()).catch(() => null),
-        fetch('/api/simulation/state').then(r => r.json()).catch(() => ({ is_running: false, current_step: 0 })),
-        fetch('/api/cyclone/track').then(r => r.json()).catch(() => null),
-        fetch('/api/alerts').then(r => r.json()).catch(() => [])
+        fetch(`${API_BASE}/api/district`).then(r => r.json()).catch(() => null),
+        fetch(`${API_BASE}/api/incidents`).then(r => r.json()).catch(() => []),
+        fetch(`${API_BASE}/api/silence`).then(r => r.json()).catch(() => []),
+        fetch(`${API_BASE}/api/audit`).then(r => r.json()).catch(() => []),
+        fetch(`${API_BASE}/api/metrics`).then(r => r.json()).catch(() => null),
+        fetch(`${API_BASE}/api/simulation/state`).then(r => r.json()).catch(() => ({ is_running: false, current_step: 0 })),
+        fetch(`${API_BASE}/api/cyclone/track`).then(r => r.json()).catch(() => null),
+        fetch(`${API_BASE}/api/alerts`).then(r => r.json()).catch(() => [])
       ]);
 
       if (cycRes) setCycloneTrack(cycRes);
@@ -241,7 +243,7 @@ export default function App() {
 
   const handleSimStart = async () => {
     try {
-      await fetch('/api/simulation/start', {
+      await fetch(`${API_BASE}/api/simulation/start`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ speed: 5 })
@@ -255,7 +257,7 @@ export default function App() {
 
   const handleSimReset = async () => {
     try {
-      await fetch('/api/simulation/reset', { method: 'POST' });
+      await fetch(`${API_BASE}/api/simulation/reset`, { method: 'POST' });
       showToast('System reset to pre-cyclone standby state.');
       fetchData();
     } catch {
@@ -277,7 +279,7 @@ export default function App() {
       };
       const numericPriority = priorityScoreMap[overridePriority] || 0.75;
 
-      const res = await fetch(`/api/incidents/${overrideIncident.id}/actions`, {
+      const res = await fetch(`${API_BASE}/api/incidents/${overrideIncident.id}/actions`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -2092,7 +2094,7 @@ function ScreenCycloneTrack({ cycloneTrack, alertsList, district, onAlertBroadca
   const handleBroadcast = async (alertId) => {
     try {
       setBroadcastingId(alertId);
-      const res = await fetch(`/api/alerts/${alertId}/broadcast`, { method: 'POST' });
+      const res = await fetch(`${API_BASE}/api/alerts/${alertId}/broadcast`, { method: 'POST' });
       const data = await res.json();
       if (data.status === 'broadcasted') {
         onShowToast(`🚨 Official Emergency Alert broadcasted to all citizens via SMS & WhatsApp! (98.4% delivery)`);
