@@ -153,7 +153,20 @@ def get_metrics():
     # Compute purely from ground truth, not hardcoded
     return compute_ground_truth_metrics()
 
-# 8. Alerts
+# 8. Cyclone Live Track & Approach
+from app.cyclone import get_cyclone_status
+
+@app.get("/api/cyclone/track")
+def get_cyclone_track():
+    """
+    Returns live cyclone approach coordinates, category, distance to landfall,
+    wind speeds, and projected path based on current simulation progress.
+    """
+    with sim_manager.lock:
+        curr_min = sim_manager.current_minute
+    return get_cyclone_status(curr_min)
+
+# 9. Early Warnings & Multi-Channel Alerts
 @app.post("/api/alerts/draft")
 def draft_alerts(req: DraftAlertsRequest):
     with sim_manager.lock:
@@ -174,3 +187,19 @@ def list_alerts():
 def approve_alert(alert_id: str):
     update_alert_status(alert_id, "approved")
     return {"status": "approved", "alert_id": alert_id}
+
+@app.post("/api/alerts/{alert_id}/broadcast")
+def broadcast_alert(alert_id: str):
+    """
+    Simulates sending alerts directly to users in the affected zone
+    via SMS Cell Broadcast, WhatsApp, and Community Siren Networks.
+    """
+    update_alert_status(alert_id, "broadcasted")
+    return {
+        "status": "broadcasted",
+        "alert_id": alert_id,
+        "channels_reached": ["SMS Cell Broadcast", "WhatsApp Emergency Channel", "HAM Radio / Siren Hubs"],
+        "delivery_rate": "98.4%",
+        "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat()
+    }
+
