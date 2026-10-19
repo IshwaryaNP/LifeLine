@@ -111,6 +111,15 @@ export default function App() {
   const [alertsList, setAlertsList] = useState([]);
   const [resourcesList, setResourcesList] = useState([]);
 
+  // Next Round Planner state
+  const [completedIncidents, setCompletedIncidents] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('lifeline_completed') || '[]'); } catch { return []; }
+  });
+  const [nextRoundSelections, setNextRoundSelections] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('lifeline_next_round') || '[]'); } catch { return []; }
+  });
+  const [briefingExported, setBriefingExported] = useState(false);
+
   // Fetch initial data
   const fetchData = async () => {
     try {
@@ -389,6 +398,17 @@ export default function App() {
             </button>
 
             <button 
+              className={`sidebar-nav-item ${activeTab === 'nextround' ? 'active' : ''}`}
+              onClick={() => setActiveTab('nextround')}
+            >
+              <TrendingUp size={18} />
+              <span>Next Round Planner</span>
+              <span className="nav-tag" style={{ background: '#7c3aed', color: '#fff', fontSize: '10px', padding: '2px 6px', borderRadius: '10px' }}>
+                {nextRoundSelections.length > 0 ? nextRoundSelections.length + ' Queued' : 'NEW'}
+              </span>
+            </button>
+
+            <button 
               className={`sidebar-nav-item ${activeTab === 'proof' ? 'active' : ''}`}
               onClick={() => { setActiveTab('proof'); setCurrentStep(3); }}
             >
@@ -444,6 +464,7 @@ export default function App() {
               {activeTab === 'prepare' && 'Step 1: Blackout Zones Preparation'}
               {activeTab === 'respond' && 'Step 2: Emergency Response Triage'}
               {activeTab === 'dispatch' && 'Automated Resource Dispatch & Fleet Allocation'}
+              {activeTab === 'nextround' && '🔄 Next Round Planner — Select Priority Targets'}
               {activeTab === 'proof' && 'Step 3: Benchmark Proof & Accuracy'}
             </h2>
             <span className="top-subtitle-path">Cyclone Biparjoy Command Center • Srikakulam District</span>
@@ -576,6 +597,44 @@ export default function App() {
                   district={district}
                   onResourceUpdated={fetchData}
                   onShowToast={showToast}
+                />
+              )}
+
+              {activeTab === 'nextround' && (
+                <ScreenNextRoundPlanner
+                  incidents={incidents}
+                  silenceData={silenceData}
+                  completedIncidents={completedIncidents}
+                  nextRoundSelections={nextRoundSelections}
+                  briefingExported={briefingExported}
+                  onMarkComplete={(id) => {
+                    const updated = completedIncidents.includes(id)
+                      ? completedIncidents.filter(x => x !== id)
+                      : [...completedIncidents, id];
+                    setCompletedIncidents(updated);
+                    localStorage.setItem('lifeline_completed', JSON.stringify(updated));
+                    showToast(completedIncidents.includes(id) ? 'Incident unmarked.' : '✅ Incident marked as Round 1 Complete!');
+                  }}
+                  onToggleNextRound={(id) => {
+                    const updated = nextRoundSelections.includes(id)
+                      ? nextRoundSelections.filter(x => x !== id)
+                      : [...nextRoundSelections, id];
+                    setNextRoundSelections(updated);
+                    localStorage.setItem('lifeline_next_round', JSON.stringify(updated));
+                    showToast(nextRoundSelections.includes(id) ? 'Removed from next round queue.' : '🎯 Added to Next Round priority queue!');
+                  }}
+                  onExportBriefing={() => {
+                    setBriefingExported(true);
+                    showToast('📋 Next Round Briefing exported to Incident Commander!');
+                    setTimeout(() => setBriefingExported(false), 5000);
+                  }}
+                  onClearAll={() => {
+                    setCompletedIncidents([]);
+                    setNextRoundSelections([]);
+                    localStorage.removeItem('lifeline_completed');
+                    localStorage.removeItem('lifeline_next_round');
+                    showToast('Round data cleared. Starting fresh round planning.');
+                  }}
                 />
               )}
 
@@ -2669,3 +2728,487 @@ function ScreenDispatch({ resourcesList, incidents, district, onResourceUpdated,
 }
 
 
+// ============================================================================
+// SCREEN: NEXT ROUND PLANNER
+// Smart decision tool to select zones & incidents for the next rescue wave.
+// Features: AI scoring, round-completion tracking, briefing export.
+// ============================================================================
+function ScreenNextRoundPlanner({
+  incidents,
+  silenceData,
+  completedIncidents,
+  nextRoundSelections,
+  briefingExported,
+  onMarkComplete,
+  onToggleNextRound,
+  onExportBriefing,
+  onClearAll
+}) {
+  const [viewFilter, setViewFilter] = useState('all'); // 'all' | 'unresolved' | 'selected' | 'silent'
+  const [sortBy, setSortBy] = useState('score'); // 'score' | 'people' | 'zone'
+  const [showBriefingPanel, setShowBriefingPanel] = useState(false);
+
+  // Compute next-round smart score for each incident
+  const scoredIncidents = useMemo(() => {
+    return incidents.map(inc => {
+      const isComplete = completedIncidents.includes(inc.id);
+      const isSelected = nextRoundSelections.includes(inc.id);
+      const isSilentZone = silenceData.some(s => s.zone_id === inc.zone_id && (s.status === 'silent' || s.risk_score >= 0.5));
+
+      // Smart next-round score:
+      // - Base: current priority score
+      // - Bonus: silent zone (no comms = underreported need)
+      // - Bonus: vulnerable people reported
+      // - Penalty: if already marked complete
+      let score = (inc.priority_score || 0) * 100;
+      if (isSilentZone) score += 20;
+      if (inc.vulnerable_count > 0) score += 10;
+      if (isComplete) score -= 80;
+
+      // Need urgency multiplier
+      if (inc.need_type === 'rescue') score += 8;
+      if (inc.need_type === 'medical') score += 5;
+
+      return {
+        ...inc,
+        nextRoundScore: Math.min(100, Math.max(0, Math.round(score))),
+        isComplete,
+        isSelected,
+        isSilentZone
+      };
+    });
+  }, [incidents, completedIncidents, nextRoundSelections, silenceData]);
+
+  // Apply view filter
+  const filteredIncidents = useMemo(() => {
+    let base = scoredIncidents;
+    if (viewFilter === 'unresolved') base = base.filter(i => !i.isComplete);
+    if (viewFilter === 'selected') base = base.filter(i => i.isSelected);
+    if (viewFilter === 'silent') base = base.filter(i => i.isSilentZone);
+
+    // Sort
+    if (sortBy === 'score') return [...base].sort((a, b) => b.nextRoundScore - a.nextRoundScore);
+    if (sortBy === 'people') return [...base].sort((a, b) => (b.estimated_people || 0) - (a.estimated_people || 0));
+    if (sortBy === 'zone') return [...base].sort((a, b) => (a.zone_name || '').localeCompare(b.zone_name || ''));
+    return base;
+  }, [scoredIncidents, viewFilter, sortBy]);
+
+  // Stats for top-banner
+  const totalIncidents = incidents.length;
+  const completedCount = completedIncidents.length;
+  const selectedCount = nextRoundSelections.length;
+  const unresolvedCritical = scoredIncidents.filter(i => !i.isComplete && i.nextRoundScore >= 70).length;
+
+  // Top 5 AI-recommended (highest score, not complete)
+  const aiRecommended = useMemo(() => {
+    return scoredIncidents
+      .filter(i => !i.isComplete)
+      .sort((a, b) => b.nextRoundScore - a.nextRoundScore)
+      .slice(0, 5);
+  }, [scoredIncidents]);
+
+  const getScoreColor = (score) => {
+    if (score >= 80) return '#dc2626';
+    if (score >= 60) return '#d97706';
+    if (score >= 40) return '#2563eb';
+    return '#64748b';
+  };
+
+  const getScoreBg = (score) => {
+    if (score >= 80) return '#fef2f2';
+    if (score >= 60) return '#fffbeb';
+    if (score >= 40) return '#eff6ff';
+    return '#f8fafc';
+  };
+
+  const needLabel = (t) => ({ rescue: 'Rescue', medical: 'Medical', shelter: 'Shelter', water: 'Water', food: 'Food' }[t] || t?.toUpperCase());
+  const needColor = (t) => ({ rescue: '#dc2626', medical: '#d97706', shelter: '#2563eb', water: '#0891b2', food: '#b45309' }[t] || '#475569');
+  const needBg = (t) => ({ rescue: '#fef2f2', medical: '#fffbeb', shelter: '#eff6ff', water: '#ecfeff', food: '#fefce8' }[t] || '#f8fafc');
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', padding: '0 0 32px 0' }}>
+
+      {/* ── TOP BANNER ── */}
+      <section className="screen-header-card" style={{ background: 'linear-gradient(135deg, #1e1b4b 0%, #312e81 50%, #4c1d95 100%)', color: '#fff', border: 'none' }}>
+        <div className="screen-header-main">
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', background: 'rgba(255,255,255,0.15)', padding: '4px 14px', borderRadius: '20px', marginBottom: '10px', fontSize: '11px', fontWeight: 700, letterSpacing: '0.08em' }}>
+            <TrendingUp size={13} />
+            NEXT RESCUE WAVE COMMAND TOOL
+          </div>
+          <h2 style={{ fontSize: '22px', fontWeight: 800, color: '#fff', margin: '0 0 8px 0' }}>Which incidents should we tackle in Round 2?</h2>
+          <p style={{ color: 'rgba(255,255,255,0.8)', fontSize: '14px', lineHeight: 1.6, maxWidth: '700px' }}>
+            AI scores every unresolved incident based on urgency, silent-zone risk, and vulnerable populations. Mark Round 1 completions, select Round 2 targets, and generate a one-click commander briefing.
+          </p>
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', marginTop: '16px' }}>
+          {[
+            { label: 'Total Incidents', value: totalIncidents, sub: 'in queue', icon: '📋' },
+            { label: 'Round 1 Complete', value: completedCount, sub: 'marked resolved', icon: '✅', highlight: completedCount > 0 },
+            { label: 'Next Round Queued', value: selectedCount, sub: 'selected for R2', icon: '🎯', highlight: selectedCount > 0 },
+            { label: 'Unresolved Critical', value: unresolvedCritical, sub: 'score ≥ 70', icon: '🚨', urgent: true }
+          ].map((s, i) => (
+            <div key={i} style={{
+              background: s.urgent ? 'rgba(220,38,38,0.25)' : s.highlight ? 'rgba(16,185,129,0.2)' : 'rgba(255,255,255,0.1)',
+              border: s.urgent ? '1px solid rgba(220,38,38,0.5)' : '1px solid rgba(255,255,255,0.15)',
+              borderRadius: '12px',
+              padding: '14px 16px'
+            }}>
+              <div style={{ fontSize: '20px', marginBottom: '4px' }}>{s.icon}</div>
+              <div style={{ fontSize: '26px', fontWeight: 800, color: '#fff', lineHeight: 1 }}>{s.value}</div>
+              <div style={{ fontSize: '12px', fontWeight: 600, color: 'rgba(255,255,255,0.9)', marginTop: '4px' }}>{s.label}</div>
+              <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.6)', marginTop: '2px' }}>{s.sub}</div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* ── TWO-COLUMN LAYOUT ── */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 360px', gap: '18px', alignItems: 'start' }}>
+
+        {/* ── LEFT: INCIDENT LIST ── */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+
+          {/* Filter & Sort controls */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+              {[
+                { key: 'all', label: '🗂 All Incidents' },
+                { key: 'unresolved', label: '⚠️ Unresolved Only' },
+                { key: 'selected', label: '🎯 Next Round Queue' },
+                { key: 'silent', label: '📡 Silent Zones' }
+              ].map(f => (
+                <button
+                  key={f.key}
+                  onClick={() => setViewFilter(f.key)}
+                  style={{
+                    padding: '6px 14px',
+                    borderRadius: '20px',
+                    border: '1.5px solid',
+                    borderColor: viewFilter === f.key ? '#7c3aed' : '#e2e8f0',
+                    background: viewFilter === f.key ? '#7c3aed' : '#fff',
+                    color: viewFilter === f.key ? '#fff' : '#475569',
+                    fontSize: '12px',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    transition: 'all 0.2s'
+                  }}
+                >{f.label}</button>
+              ))}
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 500 }}>Sort by:</span>
+              <select
+                value={sortBy}
+                onChange={e => setSortBy(e.target.value)}
+                style={{ fontSize: '12px', padding: '5px 10px', borderRadius: '8px', border: '1px solid #e2e8f0', color: '#0f172a', background: '#fff', cursor: 'pointer' }}
+              >
+                <option value="score">AI Round Score</option>
+                <option value="people">People at Risk</option>
+                <option value="zone">Zone Name</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Incident cards */}
+          {filteredIncidents.length === 0 ? (
+            <div className="empty-state" style={{ minHeight: '200px' }}>
+              <TrendingUp size={32} color="#7c3aed" style={{ opacity: 0.4 }} />
+              <p style={{ color: '#94a3b8', fontSize: '15px' }}>No incidents match this filter.</p>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', maxHeight: '640px', overflowY: 'auto', paddingRight: '4px' }}>
+              {filteredIncidents.map(inc => (
+                <div
+                  key={inc.id}
+                  style={{
+                    background: inc.isComplete ? '#f0fdf4' : '#fff',
+                    border: inc.isSelected ? '2px solid #7c3aed' : inc.isComplete ? '1.5px solid #86efac' : '1.5px solid #e2e8f0',
+                    borderRadius: '12px',
+                    padding: '14px 16px',
+                    transition: 'all 0.2s',
+                    opacity: inc.isComplete ? 0.7 : 1,
+                    position: 'relative',
+                    overflow: 'hidden'
+                  }}
+                >
+                  {/* Selected highlight bar */}
+                  {inc.isSelected && (
+                    <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: '4px', background: '#7c3aed', borderRadius: '12px 0 0 12px' }} />
+                  )}
+
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px' }}>
+                    {/* Left: Info */}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginBottom: '6px' }}>
+                        <span style={{ fontSize: '13px', fontWeight: 700, color: '#0f172a' }}>
+                          #{inc.id} — {inc.zone_name}
+                        </span>
+                        {inc.isSilentZone && (
+                          <span style={{ background: '#fef2f2', color: '#dc2626', fontSize: '10px', fontWeight: 700, padding: '2px 8px', borderRadius: '10px', border: '1px solid #fca5a5' }}>
+                            📡 SILENT ZONE
+                          </span>
+                        )}
+                        {inc.isComplete && (
+                          <span style={{ background: '#dcfce7', color: '#15803d', fontSize: '10px', fontWeight: 700, padding: '2px 8px', borderRadius: '10px' }}>
+                            ✅ Round 1 Complete
+                          </span>
+                        )}
+                        {inc.isSelected && (
+                          <span style={{ background: '#ede9fe', color: '#7c3aed', fontSize: '10px', fontWeight: 700, padding: '2px 8px', borderRadius: '10px' }}>
+                            🎯 Next Round
+                          </span>
+                        )}
+                      </div>
+
+                      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center', marginBottom: '8px' }}>
+                        <span style={{ background: needBg(inc.need_type), color: needColor(inc.need_type), fontSize: '11px', fontWeight: 600, padding: '3px 10px', borderRadius: '8px' }}>
+                          {needLabel(inc.need_type)}
+                        </span>
+                        <span style={{ fontSize: '12px', color: '#475569' }}>
+                          👥 {inc.estimated_people} people
+                        </span>
+                        {inc.vulnerable_count > 0 && (
+                          <span style={{ fontSize: '12px', color: '#b45309' }}>⚠️ {inc.vulnerable_count} vulnerable</span>
+                        )}
+                        <span style={{ fontSize: '12px', color: '#64748b' }}>
+                          📞 {inc.source_count || 1} callers
+                        </span>
+                      </div>
+
+                      <p style={{ fontSize: '12px', color: '#64748b', margin: 0, lineHeight: 1.5 }}>
+                        {inc.reasons?.[0] || 'Distress calls logged — awaiting field confirmation.'}
+                      </p>
+                    </div>
+
+                    {/* Right: Score + Actions */}
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '8px', flexShrink: 0 }}>
+                      {/* AI Round Score badge */}
+                      <div style={{
+                        background: getScoreBg(inc.nextRoundScore),
+                        border: `2px solid ${getScoreColor(inc.nextRoundScore)}`,
+                        borderRadius: '10px',
+                        padding: '6px 12px',
+                        textAlign: 'center',
+                        minWidth: '72px'
+                      }}>
+                        <div style={{ fontSize: '18px', fontWeight: 800, color: getScoreColor(inc.nextRoundScore), lineHeight: 1 }}>
+                          {inc.nextRoundScore}
+                        </div>
+                        <div style={{ fontSize: '9px', fontWeight: 700, color: getScoreColor(inc.nextRoundScore), marginTop: '2px', letterSpacing: '0.05em' }}>R2 SCORE</div>
+                      </div>
+
+                      {/* Action buttons */}
+                      <button
+                        onClick={() => onToggleNextRound(inc.id)}
+                        title={inc.isSelected ? 'Remove from next round' : 'Add to next round queue'}
+                        style={{
+                          padding: '6px 12px',
+                          borderRadius: '8px',
+                          border: '1.5px solid',
+                          borderColor: inc.isSelected ? '#7c3aed' : '#e2e8f0',
+                          background: inc.isSelected ? '#7c3aed' : '#fff',
+                          color: inc.isSelected ? '#fff' : '#475569',
+                          fontSize: '11px',
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                          width: '100%',
+                          transition: 'all 0.2s'
+                        }}
+                      >
+                        {inc.isSelected ? '🎯 Queued for R2' : '+ Add to R2 Queue'}
+                      </button>
+
+                      <button
+                        onClick={() => onMarkComplete(inc.id)}
+                        title={inc.isComplete ? 'Unmark completion' : 'Mark as Round 1 Complete'}
+                        style={{
+                          padding: '5px 12px',
+                          borderRadius: '8px',
+                          border: '1.5px solid',
+                          borderColor: inc.isComplete ? '#86efac' : '#e2e8f0',
+                          background: inc.isComplete ? '#dcfce7' : '#fff',
+                          color: inc.isComplete ? '#15803d' : '#64748b',
+                          fontSize: '11px',
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                          width: '100%',
+                          transition: 'all 0.2s'
+                        }}
+                      >
+                        {inc.isComplete ? '✅ R1 Done' : '○ Mark R1 Done'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* ── RIGHT COLUMN: AI RECOMMENDATIONS + BRIEFING ── */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+
+          {/* AI Top Picks */}
+          <div className="cyclone-card">
+            <div className="cyclone-card-header">
+              <span className="cyclone-card-title">
+                <TrendingUp size={16} color="#7c3aed" />
+                AI Top 5 Next Round Picks
+              </span>
+              <span style={{ fontSize: '10px', color: '#7c3aed', fontWeight: 700, background: '#ede9fe', padding: '2px 8px', borderRadius: '10px' }}>SMART</span>
+            </div>
+            <div style={{ padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              {aiRecommended.length === 0 ? (
+                <p style={{ color: '#94a3b8', fontSize: '13px', textAlign: 'center', padding: '16px' }}>All incidents marked complete! 🎉</p>
+              ) : aiRecommended.map((inc, idx) => (
+                <div key={inc.id} style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '10px',
+                  padding: '10px 12px',
+                  background: inc.isSelected ? '#ede9fe' : '#f8fafc',
+                  border: `1.5px solid ${inc.isSelected ? '#c4b5fd' : '#e2e8f0'}`,
+                  borderRadius: '10px',
+                  cursor: 'pointer',
+                  transition: 'all 0.15s'
+                }}
+                  onClick={() => onToggleNextRound(inc.id)}
+                  title="Click to add/remove from next round queue"
+                >
+                  <div style={{
+                    width: '28px', height: '28px',
+                    borderRadius: '50%',
+                    background: idx === 0 ? '#dc2626' : idx === 1 ? '#d97706' : idx === 2 ? '#7c3aed' : '#2563eb',
+                    color: '#fff',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: '12px', fontWeight: 800, flexShrink: 0
+                  }}>{idx + 1}</div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: '12px', fontWeight: 700, color: '#0f172a', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {inc.zone_name}
+                    </div>
+                    <div style={{ fontSize: '11px', color: '#64748b' }}>
+                      {needLabel(inc.need_type)} • {inc.estimated_people} people
+                    </div>
+                  </div>
+                  <div style={{ fontSize: '16px', fontWeight: 800, color: getScoreColor(inc.nextRoundScore), flexShrink: 0 }}>
+                    {inc.nextRoundScore}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Next Round Queue Summary */}
+          {nextRoundSelections.length > 0 && (
+            <div className="cyclone-card">
+              <div className="cyclone-card-header">
+                <span className="cyclone-card-title">
+                  <Navigation size={16} color="#059669" />
+                  Round 2 Queue ({nextRoundSelections.length})
+                </span>
+                <button
+                  onClick={() => setShowBriefingPanel(!showBriefingPanel)}
+                  style={{ fontSize: '11px', color: '#059669', fontWeight: 700, background: '#dcfce7', border: '1px solid #86efac', borderRadius: '8px', padding: '3px 10px', cursor: 'pointer' }}
+                >
+                  {showBriefingPanel ? 'Hide Briefing' : '📋 View Briefing'}
+                </button>
+              </div>
+
+              {showBriefingPanel && (
+                <div style={{ padding: '12px 16px', background: '#f8fafc', borderTop: '1px solid #e2e8f0', fontFamily: 'monospace', fontSize: '11px', lineHeight: 1.8, color: '#334155', borderRadius: '0 0 12px 12px' }}>
+                  <div style={{ fontWeight: 700, color: '#0f172a', marginBottom: '4px' }}>== NEXT ROUND OPERATIONAL BRIEFING ==</div>
+                  <div>Issued by: Control Room AI Triage System</div>
+                  <div>Time: {new Date().toLocaleString()}</div>
+                  <div>──────────────────────────</div>
+                  {scoredIncidents
+                    .filter(i => i.isSelected)
+                    .sort((a, b) => b.nextRoundScore - a.nextRoundScore)
+                    .map((inc, i) => (
+                      <div key={inc.id}>
+                        [{i + 1}] {inc.zone_name} | {needLabel(inc.need_type)} | {inc.estimated_people} persons | Score: {inc.nextRoundScore}
+                      </div>
+                    ))
+                  }
+                  <div>──────────────────────────</div>
+                  <div>Total: {nextRoundSelections.length} targets | {scoredIncidents.filter(i => i.isSelected).reduce((s, i) => s + (i.estimated_people || 0), 0)} persons at risk</div>
+                </div>
+              )}
+
+              <div style={{ padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <button
+                  onClick={onExportBriefing}
+                  style={{
+                    width: '100%',
+                    padding: '10px',
+                    background: briefingExported ? '#dcfce7' : 'linear-gradient(135deg, #059669, #047857)',
+                    color: briefingExported ? '#15803d' : '#fff',
+                    border: 'none',
+                    borderRadius: '10px',
+                    fontSize: '13px',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '8px',
+                    transition: 'all 0.2s'
+                  }}
+                >
+                  <Megaphone size={16} />
+                  {briefingExported ? '✅ Briefing Sent to Commander!' : 'Export Briefing to Field Commander'}
+                </button>
+
+                <button
+                  onClick={onClearAll}
+                  style={{
+                    width: '100%',
+                    padding: '8px',
+                    background: 'transparent',
+                    color: '#ef4444',
+                    border: '1px solid #fca5a5',
+                    borderRadius: '10px',
+                    fontSize: '12px',
+                    fontWeight: 600,
+                    cursor: 'pointer'
+                  }}
+                >
+                  🔄 Clear All & Start New Round
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* How it works card */}
+          <div className="cyclone-card">
+            <div className="cyclone-card-header">
+              <span className="cyclone-card-title">
+                <Info size={16} color="#2563eb" />
+                How Round Scoring Works
+              </span>
+            </div>
+            <div style={{ padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              {[
+                { icon: '🔴', label: 'Score 80–100', desc: 'Critical — must be in next round' },
+                { icon: '🟡', label: 'Score 60–79', desc: 'High urgency — strongly recommended' },
+                { icon: '🔵', label: 'Score 40–59', desc: 'Moderate — queue if capacity allows' },
+                { icon: '⚪', label: 'Score < 40', desc: 'Lower priority — post-wave scheduling' },
+                { icon: '📡', label: 'Silent Zone', desc: '+20 bonus — likely underreported' },
+                { icon: '⚠️', label: 'Vulnerable', desc: '+10 bonus — elderly, children, pregnant' }
+              ].map((r, i) => (
+                <div key={i} style={{ display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
+                  <span style={{ fontSize: '16px', flexShrink: 0 }}>{r.icon}</span>
+                  <div>
+                    <div style={{ fontSize: '12px', fontWeight: 700, color: '#0f172a' }}>{r.label}</div>
+                    <div style={{ fontSize: '11px', color: '#64748b' }}>{r.desc}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
